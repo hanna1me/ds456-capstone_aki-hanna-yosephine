@@ -1,0 +1,511 @@
+---
+title: "Transit Data Exploration"
+author: "Hanna Chang"
+format: html
+editor: visual
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(sf)
+library(ggplot2)
+library(leaflet)
+library(RColorBrewer)
+```
+
+```{r, message=FALSE, warning=FALSE}
+files <- list.files("GTFS20201128", pattern = "\\.txt$", full.names = TRUE)
+```
+
+```{r, message=FALSE, warning=FALSE}
+for (file in files) {
+  dat <- read_delim(file, delim = ",")
+  csv_name <- str_replace(file, "\\.txt$", ".csv")
+  write_csv(dat, csv_name)
+  cat("Converted:", file, "→", csv_name, "\n")
+}
+```
+
+```{r, message=FALSE, warning=FALSE}
+agency <- read_csv("GTFS/agency.csv")
+calendar_dates <- read_csv("GTFS20201128/calendar_dates.csv")
+calendar <- read_csv("GTFS20201128/calendar.csv")
+feed_info <- read_csv("GTFS20201128/feed_info.csv")
+levels <- read_csv("GTFS20201128/levels.csv")
+linked_datasets <- read_csv("GTFS20201128/linked_datasets.csv")
+pathways <- read_csv("GTFS20201128/pathways.csv")
+routes <- read_csv("GTFS20201128/routes.csv")
+shapes <- read_csv("GTFS20201128/shapes.csv")
+stop_times <- read_csv("GTFS20201128/stop_times.csv")
+stops <- read_csv("GTFS20201128/stops.csv")
+trips <- read_csv("GTFS20201128/trips.csv")
+vehicles <- read_csv("GTFS20201128/vehicles.csv")
+```
+
+```{r, message=FALSE, warning=FALSE}
+names(agency)
+names(calendar_dates)
+names(calendar)
+names(feed_info)
+names(levels)
+names(linked_datasets)
+names(pathways)
+names(routes)
+names(shapes)
+names(stop_times)
+names(stops)
+names(trips)
+names(vehicles)
+```
+
+```{r clean, message=FALSE, warning=FALSE}
+pathways <- pathways %>%
+                    select(-c(stair_count, max_stair_flight,
+                    mechanical_stair_count, pathway_code, is_bidirectional,
+                    pathway_mode, cover_type))
+
+feed_info <- feed_info %>%
+                    select(-c(feed_publisher_name, feed_publisher_url,
+                              feed_lang, default_lang, feed_version,
+                              feed_contact_email))
+  
+routes <- routes %>%
+                  select(-c(agency_id, route_url, route_desc,
+                            route_color, route_text_color, route_sort_order)) %>%
+                  mutate(route_short_name = as.character(route_short_name)) %>%
+                  mutate(route_name = coalesce(route_short_name, route_long_name)) %>%
+                  select(-c(route_long_name, route_short_name))
+
+stops <- stops %>%
+                  select(-c(wheelchair_boarding, platform_code, parent_station,
+                            level_id, zone_id, location_type))
+
+trips <- trips %>%
+                  select(-c(wheelchair_accessible, branch_letter, boarding_type,
+                            direction_id))
+
+stop_times <- stop_times %>%
+                      select(-c(pickup_type, drop_off_type, timepoint))
+
+```
+
+## Map `shapes` static
+
+```{r map, message=FALSE, warning=FALSE}
+shapes_pts <- shapes %>%
+  st_as_sf(coords = c("shape_pt_lon", "shape_pt_lat"),
+           crs = 4326, remove = FALSE)
+
+# shapes_sf <- shapes %>%
+#   arrange(shape_id, shape_pt_sequence) %>%
+#   group_by(shape_id) %>%
+#   summarise(
+#     geometry = st_sfc(st_linestring(matrix(c(shape_pt_lon, shape_pt_lat), ncol = 2))),
+#     .groups = "drop"
+#   ) %>%
+#   st_as_sf(crs = 4326)
+
+shapes_sf <- shapes_pts %>%
+  arrange(shape_id, shape_pt_sequence) %>%
+  group_by(shape_id) %>%
+  summarise(do_union = FALSE) %>%
+  st_cast("LINESTRING")
+
+# shapes_sf0 <- shapes %>%
+#   arrange(shape_id, shape_pt_sequence) %>%
+#   group_by(shape_id) %>%
+#   filter(n() > 1) %>nts
+#   summarise(
+#     geometry = st_sfc(st_linestring(matrix(c(shape_pt_lon, shape_pt_lat), ncol = 2))),
+#     .groups = "drop"
+#   ) %>%
+#   st_as_sf(crs = 4326)
+```
+
+```{r attach_route_info, message=FALSE, warning=FALSE}
+trips  <- trips  %>% mutate(route_id = as.character(route_id),
+                            shape_id = as.character(shape_id))
+routes <- routes %>% mutate(route_id = as.character(route_id))
+shapes_sf <- shapes_sf %>% mutate(shape_id = as.character(shape_id))
+
+shape_routes <- trips %>%
+  distinct(shape_id, route_id)
+
+shapes_routes <- shapes_sf %>%
+  left_join(shape_routes, by = "shape_id") %>%
+  left_join(routes,      by = "route_id")
+```
+
+
+```{r static_plot, message=FALSE, warning=FALSE}
+# metro_ids <- c("901","902","905","904","903",
+#                "921","922","923","924","925")
+# 
+# metro_shapes <- shapes_routes %>%
+#   filter(route_id %in% metro_ids)
+# 
+# ggplot(metro_shapes) +
+#   geom_sf(aes(color = route_name), size = 0.8) +
+#   theme_minimal() +
+#   labs(title = "Metro Transit – METRO Lines",
+#        color = "Route")
+
+all_shapes <- shapes_routes %>%
+  filter(!is.na(route_id))
+
+ggplot(all_shapes) +
+  geom_sf(aes(color = factor(route_type)), size = 0.4) +
+  theme_minimal() +
+  labs(title = "All routes with GTFS shapes",
+       color = "route_type")
+```
+## Routes with missing shapes
+**There are no routes with missing shapes**
+
+```{r missing_shapes, message=FALSE, warning=FALSE}
+# routes_with_shapes <- shapes_routes %>%
+#   distinct(route_id)
+# 
+# routes_missing_shapes <- routes %>%
+#   anti_join(routes_with_shapes, by = "route_id")
+# 
+# routes_missing_shapes
+```
+
+## Map rail + BRT routes (exploratory)
+```{r, message=FALSE, warning=FALSE}
+rail_brt <- shapes_routes %>%
+  filter(route_type %in% c(0, 2, 3),
+         str_detect(route_name, "METRO|Northstar"))
+
+ggplot(rail_brt) +
+  geom_sf(aes(color = route_name), size = 0.7) +
+  theme_minimal() +
+  labs(title = "Rail + BRT routes",
+       color = "Route")
+```
+
+
+## Map `shapes` leaflet
+
+```{r leaflet, message=FALSE, warning=FALSE}
+pal <- colorFactor("Set3", all_shapes$route_name)
+
+leaflet() %>%
+  addTiles() %>%
+  addPolylines(data = all_shapes,
+               color = ~pal(route_name),
+               weight = 3,
+               opacity = 0.9,
+               group = "Transit routes")
+
+leaflet(all_shapes) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolylines(color = ~pal(route_name),
+               weight = 3, opacity = 0.9) %>%
+  addLegend("bottomright", pal = pal,
+            values = ~route_name,
+            title = "Route",
+            opacity = 1)
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+pal_route <- colorFactor("Set3", domain = all_shapes2$route_name)
+
+m_routes <- leaflet(all_shapes2) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolylines(
+    color   = ~pal_route(route_name),
+    weight  = 2,
+    opacity = 0.9,
+    label   = ~paste(route_name),
+    group   = "All routes"
+  ) %>%
+addLegend("bottomright",
+          pal    = pal_route,
+          values = all_shapes2$route_name,
+          title  = "Route name",
+          opacity = 1)
+
+m_routes
+
+```
+
+```{r, message=FALSE, warning=FALSE}
+route_levels <- sort(unique(all_shapes2$route_name))
+pal_route <- colorFactor("Set3", domain = route_levels)
+
+# split route names into chunk, 25 labels
+chunks <- split(route_levels, ceiling(seq_along(route_levels) / 12))
+positions <- c("bottomright", "bottomleft", "topright", "topleft")
+
+m_routes <- leaflet(all_shapes2) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolylines(
+    color   = ~pal_route(route_name),
+    weight  = 2,
+    opacity = 0.9,
+    label   = ~route_name
+  )
+
+for (i in seq_along(chunks)) {
+  m_routes <- m_routes %>%
+    addLegend(
+      position = "bottomright",
+      colors   = pal_route(chunks[[i]]),
+      labels   = chunks[[i]],
+      title    = if (i == 1) "Route name" else NULL,
+      opacity  = 1
+    )
+}
+
+m_routes
+```
+
+
+```{r, message=FALSE, warning=FALSE}
+all_shapes2 <- shapes_routes %>%
+  filter(!is.na(route_id)) %>%
+  mutate(
+    route_type_f = dplyr::recode(
+      as.character(route_type),
+      `0` = "Light rail",
+      `2` = "Commuter rail",
+      `3` = "Bus",
+      .default = "Other"
+    )
+  )
+
+type_levels <- sort(unique(all_shapes2$route_type_f))
+
+pal_type <- colorFactor("Set1", domain = all_shapes2$route_type_f)
+
+m_type <- leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron)
+
+for (tt in type_levels) {
+  dat <- all_shapes2 %>% filter(route_type_f == tt)
+
+  m_type <- m_type %>%
+    addPolylines(
+      data   = dat,
+      color  = ~pal_type(route_type_f),
+      weight = 3,
+      opacity = 0.9,
+      group  = tt,
+      label  = ~route_name
+    )
+}
+
+m_type <- m_type %>%
+  addLayersControl(
+    overlayGroups = type_levels,
+    options = layersControlOptions(collapsed = FALSE)
+  ) %>%
+  addLegend(
+    "bottomright",
+    pal    = pal_type,
+    values = all_shapes2$route_type_f,
+    title  = "Route type",
+    opacity = 1
+  )
+
+m_type
+```
+
+
+
+## Map scooter trips with transit routes (once data is obtained)
+```{r, message=FALSE, warning=FALSE}
+scooters_sf <- scooter_trips %>%
+  st_as_sf(coords = c("Start_Lon", "Start_Lat"),
+           crs = 4326, remove = FALSE)
+
+leaflet() %>%
+  addTiles() %>%
+  addPolylines(data = metro_shapes,
+               color = ~pal(route_name),
+               weight = 3, opacity = 0.9,
+               group = "Transit routes") %>%
+  addCircleMarkers(data = scooters_sf,
+                   radius = 2, stroke = FALSE,
+                   fillOpacity = 0.4,
+                   group = "Scooter trips") %>%
+  addLayersControl(overlayGroups = c("Transit routes", "Scooter trips"))
+```
+
+
+# Limit: Minneapolis
+
+## City boundaries
+
+```{r city_boundary, message=FALSE, warning=FALSE}
+# MNPLSCity_Boundary <- st_read("~/Desktop/Capstone class/Final/MNPLSCity_Boundary/City_Boundary.shp")
+MNPLSCity_Boundary <- st_transform(MNPLSCity_Boundary, st_crs(all_shapes2))
+```
+
+```{r, message=FALSE, warning=FALSE}
+route_levels_mpls <- sort(unique(all_shapes_mpls$route_name))
+pal_route_mpls    <- colorFactor("Set3", domain = route_levels_mpls)
+
+bbox_mpls <- st_bbox(MNPLSCity_Boundary)
+
+m_routes_mpls <- leaflet(all_shapes_mpls) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolylines(
+    color   = ~pal_route_mpls(route_name),
+    weight  = 2,
+    opacity = 0.9,
+    label   = ~route_name
+  ) %>%
+  fitBounds(bbox_mpls["xmin"], bbox_mpls["ymin"],
+            bbox_mpls["xmax"], bbox_mpls["ymax"]) %>%
+  addLegend(
+    "bottomright",
+    pal    = pal_route_mpls,
+    values = ~route_name,
+    title  = "Route name – Minneapolis only",
+    opacity = 1
+  )
+
+m_routes_mpls
+```
+
+```{r, message=FALSE, warning=FALSE}
+st_crs(all_shapes2)
+st_crs(MNPLSCity_Boundary)
+
+all_shapes_mpls <- st_intersection(all_shapes2, MNPLSCity_Boundary)
+
+nrow(all_shapes_mpls)
+unique(st_geometry_type(all_shapes_mpls))
+
+# all_shapes_mpls <- all_shapes_mpls %>%
+#   st_collection_extract("LINESTRING") %>%
+#   filter(!st_is_empty(geometry))
+```
+
+## Did that work??
+
+```{r, message=FALSE, warning=FALSE}
+library(leaflet)
+
+m_min <- leaflet(all_shapes_mpls) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolylines(weight = 2, opacity = 0.9)
+
+m_min
+```
+
+## It worked, okay ok now we add route colors
+
+```{r, message=FALSE, warning=FALSE}
+route_levels_mpls <- sort(unique(all_shapes_mpls$route_name))
+pal_route_mpls    <- colorFactor("Set3", domain = route_levels_mpls)
+
+m_routes_mpls <- leaflet(all_shapes_mpls) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addPolylines(
+    color   = ~pal_route_mpls(route_name),
+    weight  = 2,
+    opacity = 0.9,
+    label   = ~route_name
+  ) %>%
+  fitBounds(
+    unname(bbox_mpls["xmin"]),
+    unname(bbox_mpls["ymin"]),
+    unname(bbox_mpls["xmax"]),
+    unname(bbox_mpls["ymax"])
+  ) %>%
+  addLegend(
+    "bottomright",
+    pal    = pal_route_mpls,
+    values = ~route_name,
+    title  = "Routes serving Minneapolis",
+    opacity = 1
+  )
+
+m_routes_mpls
+
+```
+
+
+
+# Comprehensive
+
+```{r, message=FALSE, warning=FALSE}
+all_shapes_mpls <- all_shapes_mpls %>%
+  mutate(
+    route_type_f = recode(
+      as.character(route_type),
+      `0` = "Light rail",
+      `2` = "Commuter rail",
+      `3` = "Bus",
+      .default = "Other"
+    )
+  )
+
+route_levels_mpls <- sort(unique(all_shapes_mpls$route_name))
+
+pal_route_mpls <- colorFactor(
+  palette = colorRampPalette(brewer.pal(12, "Set3"))(length(route_levels_mpls)),
+  domain  = route_levels_mpls
+)
+
+type_levels <- sort(unique(all_shapes_mpls$route_type_f))
+
+bbox_mpls <- st_bbox(MNPLSCity_Boundary)
+```
+
+```{r, message=FALSE, warning=FALSE}
+route_levels_mpls <- sort(unique(all_shapes_mpls$route_name))
+```
+
+```{r, message=FALSE, warning=FALSE}
+m_type_routes <- leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron)
+
+for (tt in type_levels) {
+  dat <- all_shapes_mpls %>%
+    dplyr::filter(route_type_f == tt)
+
+  m_type_routes <- m_type_routes %>%
+    addPolylines(
+      data   = dat,
+      color  = ~pal_route_mpls(route_name),
+      weight = 2,
+      opacity = 0.9,
+      group  = tt,
+      label  = ~route_name
+    )
+}
+
+bbox_mpls <- st_bbox(MNPLSCity_Boundary)
+
+m_type_routes <- m_type_routes %>%
+  fitBounds(
+    unname(bbox_mpls["xmin"]), unname(bbox_mpls["ymin"]),
+    unname(bbox_mpls["xmax"]), unname(bbox_mpls["ymax"])
+  ) %>%
+  addLegend(
+    position = "bottomright",
+    pal      = pal_route_mpls,
+    values   = route_levels_mpls,
+    title    = "Routes serving Minneapolis",
+    opacity  = 1
+  ) %>%
+  addLayersControl(
+    position = "topleft",
+    overlayGroups = type_levels,
+    options = layersControlOptions(collapsed = FALSE)
+  )
+
+m_type_routes
+```
+
+
+
