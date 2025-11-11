@@ -1,0 +1,245 @@
+---
+title: "DataConcat"
+author: "Hanna Chang"
+format: html
+editor: visual
+---
+
+# Setup
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+# Data Import
+
+```{r}
+setwd("~/Desktop/dataconcat")
+data_dir <- "Data/GTFS20201128"
+
+agency <- readr::read_csv(file.path(data_dir, "agency.txt"))
+routes <- readr::read_csv(file.path(data_dir, "routes.txt"))
+trips  <- readr::read_csv(file.path(data_dir, "trips.txt"))
+stops  <- readr::read_csv(file.path(data_dir, "stops.txt"))
+calendar       <- readr::read_csv(file.path(data_dir, "calendar.txt"))
+calendar_dates <- readr::read_csv(file.path(data_dir, "calendar_dates.txt"))
+feed_info      <- readr::read_csv(file.path(data_dir, "feed_info.txt"))
+```
+
+Sanity check...
+
+```{r}
+list(
+  agency = dim(agency),
+  routes = dim(routes),
+  trips  = dim(trips),
+  stops  = dim(stops),
+  calendar = dim(calendar),
+  calendar_dates = dim(calendar_dates),
+  feed_info = dim(feed_info)
+)
+```
+
+# GTFS trips full
+
+```{r parse_calendar_dates}
+calendar <- calendar %>%
+  mutate(
+    start_date = as.Date(as.character(start_date), format = "%Y%m%d"),
+    end_date   = as.Date(as.character(end_date),   format = "%Y%m%d")
+  )
+
+calendar_dates <- calendar_dates %>%
+  mutate(
+    exception_date = as.Date(as.character(date), format = "%Y%m%d")
+  ) %>%
+  select(-date)
+```
+
+```{r}
+gtfs_trips_full <- trips %>%
+  left_join(routes, by = "route_id") %>%
+  left_join(agency, by = "agency_id") %>%
+  left_join(calendar, by = "service_id") %>%
+  left_join(calendar_dates,
+            by = "service_id",
+            multiple = "all") 
+```
+
+```{r}
+if (nrow(feed_info) == 1) {
+  gtfs_trips_full <- gtfs_trips_full %>%
+    mutate(
+      feed_publisher_name = feed_info$feed_publisher_name[1],
+      feed_publisher_url  = feed_info$feed_publisher_url[1],
+      feed_lang           = feed_info$feed_lang[1],
+      default_lang        = feed_info$default_lang[1],
+      feed_start_date     = as.Date(
+        as.character(feed_info$feed_start_date[1]), "%Y%m%d"
+      ),
+      feed_end_date       = as.Date(
+        as.character(feed_info$feed_end_date[1]), "%Y%m%d"
+      ),
+      feed_version        = feed_info$feed_version[1],
+      feed_contact_email  = feed_info$feed_contact_email[1]
+    )
+}
+```
+
+Another sanity check!
+
+```{r}
+dim(gtfs_trips_full)
+head(gtfs_trips_full)
+```
+
+# Cleaning
+
+```{r}
+gtfs_trips_clean <- gtfs_trips_full %>%
+  mutate(
+    route_type = case_when(
+      route_type == 0 ~ "Light Rail",
+      route_type == 2 ~ "Commuter Rail",
+      route_type == 3 ~ "Bus",
+    ),
+    service_active = case_when(
+      is.na(exception_type) & Sys.Date() >= start_date & Sys.Date() <= end_date ~ TRUE,
+      exception_type == 1 & exception_date == Sys.Date() ~ TRUE,
+      exception_type == 2 & exception_date == Sys.Date() ~ FALSE,
+      TRUE ~ FALSE
+    )
+  ) %>%
+  mutate(
+    route_short_name = as.character(
+      route_short_name
+      )
+    ) %>%
+  mutate(
+    route_name = coalesce(
+      route_short_name, route_long_name
+      )
+    ) %>%
+  select(
+    -c(route_long_name, route_short_name)
+    ) %>%
+  select(
+    -c(wheelchair_accessible, branch_letter, agency_id, direction_id,
+       feed_publisher_name, feed_publisher_url, feed_lang, default_lang,
+       feed_start_date, feed_end_date, feed_version, feed_contact_email,
+       agency_timezone)
+  )
+```
+
+# Standardize data
+
+Note: We don't have realized times here (only schedule), so keep these as NA for now:
+
+```{r}
+transit_trips_common <- gtfs_trips_full %>%
+  transmute(
+    data_source = "gtfs_metro_transit",
+    mode = case_when(
+      route_type == 0 ~ "light_rail",
+      route_type == 2 ~ "commuter_rail",
+      route_type == 3 ~ "bus",
+      TRUE            ~ "other_transit"
+    ),
+    trip_global_id  = trip_id,
+    vehicle_type    = mode,
+
+    trip_duration_s = NA_real_,
+    trip_distance_m = NA_real_,
+    start_time      = as.POSIXct(NA),
+    end_time        = as.POSIXct(NA),
+
+    route_id,
+    #route_name,
+    trip_headsign,
+    direction,
+
+    service_id,
+    service_start_date = start_date,
+    service_end_date   = end_date,
+    exception_date,
+    exception_type,
+
+    agency_id,
+
+    # Placeholders
+    StartCenterlineID   = NA_real_,
+    StartCenterlineType = NA_character_,
+    EndCenterlineID     = NA_real_,
+    EndCenterlineType   = NA_character_
+  )
+```
+
+## Once open data request is fulfilled and we get the centerline data
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+scooter_trips_common <- scooter_clean %>%
+  transmute(
+    data_source = data_source,
+    mode = case_when(
+      vehicleType == "scooter" ~ "micromobility_scooter",
+      vehicleType == "ebike"   ~ "micromobility_ebike",
+      TRUE                     ~ "micromobility_other"
+    ),
+    trip_global_id  = paste0("scooter_", TripID),
+    vehicle_type    = vehicleType,
+
+    trip_duration_s = TripDuration,
+    trip_distance_m = TripDistance,
+    start_time,
+    end_time,
+
+    # NA
+    route_id             = NA_character_,
+    route_short_name     = NA_character_,
+    route_long_name      = NA_character_,
+    trip_headsign        = NA_character_,
+    direction_id         = NA_integer_,
+    direction            = NA_character_,
+    service_id           = NA_character_,
+    service_start_date   = as.Date(NA),
+    service_end_date     = as.Date(NA),
+    exception_date       = as.Date(NA),
+    exception_type       = NA_integer_,
+    agency_id            = NA_character_,
+    agency_name          = NA_character_,
+    feed_version         = NA_real_,
+    feed_start_date      = as.Date(NA),
+    feed_end_date        = as.Date(NA),
+
+    StartCenterlineID,
+    StartCenterlineType,
+    EndCenterlineID,
+    EndCenterlineType
+  )
+```
+
+## Combine transit + micromobility
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+unified_trips <- bind_rows(
+  transit_trips_common,
+  scooter_trips_common
+)
+```
+
+
+# Export unified data
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+data_unified <- list(
+  unified_trips = unified_trips,
+  gtfs_trips_full = gtfs_trips_full,
+  stops   = stops
+)
+
+readr::write_csv(unified_trips, file.path(data_dir, "unified_trips.csv"))
+```
+
+
+
+
+
