@@ -1,6 +1,6 @@
 # ds456-capstone_aki-hanna-yosephine
 
-Aki Wada Hanna Chang Yosephine Manihuruk
+Aki Wada, Hanna Chang, and Yosephine Manihuruk
 
 ## Research Question
 
@@ -28,7 +28,7 @@ reducing environmental impact.
 
 | File/Folder | Description | Source Link |
 |--------------|-------------|--------------|
-| `GTFS20201128` | Contains detailed information about public transit routes, stops, and schedules in Minneapolis in the week of November 28, 2020. <br><br>**Notes:** All datasets must be concatenated into one GTFS dataset for analysis for a given timeframe. | [https://gtfs.org/](https://gtfs.org/) <br> [https://svc.metrotransit.org/mtgtfs/archive/](https://svc.metrotransit.org/mtgtfs/archive/) |
+| `GTFS20201128.zip` | **Must be downloaded and upzipped. File size too large to upload to repo.** <br><br> Contains detailed information about public transit routes, stops, and schedules in Minneapolis in the week of November 28, 2020. <br><br>**Notes:** All datasets must be concatenated into one GTFS dataset for analysis for a given timeframe. | [https://gtfs.org/](https://gtfs.org/) <br> [https://svc.metrotransit.org/mtgtfs/archive/](https://svc.metrotransit.org/mtgtfs/archive/) |
 | `MNPSC_City_Boundary` | Shapefile and `.csv` of Minneapolis city boundary. | [https://opendata.minneapolismn.gov/search?groupIds=1390110900e456482f79](https://opendata.minneapolismn.gov/search?groupIds=1390110900e456482f79) |
 
 
