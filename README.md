@@ -1,9 +1,3 @@
----
-editor_options: 
-  markdown: 
-    wrap: 72
----
-
 # ds456-capstone_aki-hanna-yosephine
 
 Aki Wada Hanna Chang Yosephine Manihuruk
@@ -32,31 +26,11 @@ reducing environmental impact.
 
 ## Datasets/Data Source
 
-+---------------+---------------------------------+---------------+
-| File/Folder   | Description                     | Source Link   |
-+===============+=================================+===============+
-| `             | Contains detailed information   | \<https       |
-| GTFS20201128` | about public transit routes,    | :             |
-|               | stops, and schedules in         | //gtfs.org/\> |
-|               | Minneapolis in the week of      |               |
-|               | November 28, 2020               | \<https:      |
-|               |                                 | //svc.metrotr |
-|               | Notes: All data sets must be    | ansit.org/mtg |
-|               | concatenated into one GTFS      | t             |
-|               | dataset for analysis for a      | fs/archive/\> |
-|               | given timeframe                 |               |
-+---------------+---------------------------------+---------------+
-| `MNPSC        | Shapefile and .csv of           | \<https       |
-| ity_Boundary` | Minneapolis city boundary       | ://opendata.m |
-|               |                                 | inneapolismn. |
-|               |                                 | gov/searchgro |
-|               |                                 | upIds=1390110 |
-|               |                                 | 0900e456482f7 |
-|               |                                 | 9             |
-|               |                                 | 84e822f7ad9\> |
-+---------------+---------------------------------+---------------+
-|               |                                 |               |
-+---------------+---------------------------------+---------------+
+| File/Folder | Description | Source Link |
+|--------------|-------------|--------------|
+| `GTFS20201128` | Contains detailed information about public transit routes, stops, and schedules in Minneapolis in the week of November 28, 2020. <br><br>**Notes:** All datasets must be concatenated into one GTFS dataset for analysis for a given timeframe. | [https://gtfs.org/](https://gtfs.org/) <br> [https://svc.metrotransit.org/mtgtfs/archive/](https://svc.metrotransit.org/mtgtfs/archive/) |
+| `MNPSC_City_Boundary` | Shapefile and `.csv` of Minneapolis city boundary. | [https://opendata.minneapolismn.gov/search?groupIds=1390110900e456482f79](https://opendata.minneapolismn.gov/search?groupIds=1390110900e456482f79) |
+
 
 ## Rest Of The Semester Plan
 
@@ -116,26 +90,9 @@ reducing environmental impact.
 
 ## Group Member Contributions to the Intermediate Materials Assignment
 
-+------------------+-------------------------------------------------+
-| Name             | Contribution Description                        |
-+==================+=================================================+
-| Aki Wada         | -   Prepared slides for the Intermediate        |
-|                  |     Presentation, including all necessary       |
-|                  |     information relayed by group members        |
-|                  |                                                 |
-|                  | -   Contacting Max Gonzalez for a second follow |
-|                  |     up on the progress of data request          |
-+------------------+-------------------------------------------------+
-| Hanna Chang      | -   Completed the Intermediate Narrative, incl. |
-|                  |     tentative scheduling for the rest of the    |
-|                  |     semester                                    |
-|                  |                                                 |
-|                  | -   Worked on the Github repo for narrative     |
-|                  |     submission and file/code reproducibility    |
-+------------------+-------------------------------------------------+
-| Yosephine        | -   Initiating in-person group meet prior to    |
-| Manihuruk        |     presentation day                            |
-|                  |                                                 |
-|                  | -   Fine-tuning the direction of the project    |
-|                  |     upon data exploration and investigation     |
-+------------------+-------------------------------------------------+
+| Name | Contribution Description |
+|------|---------------------------|
+| **Aki Wada** | - Prepared slides for the Intermediate Presentation, including all necessary information relayed by group members.<br> - Contacted Max Gonzalez for a second follow-up on the progress of the data request. |
+| **Hanna Chang** | - Completed the Intermediate Narrative, including tentative scheduling for the rest of the semester.<br> - Worked on the GitHub repository for narrative submission and file/code reproducibility. |
+| **Yosephine Manihuruk** | - Initiated in-person group meeting prior to presentation day.<br> - Fine-tuned the direction of the project upon data exploration and investigation. |
+
