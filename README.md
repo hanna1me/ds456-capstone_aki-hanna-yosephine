@@ -1,32 +1,16 @@
----
-editor_options: 
-  markdown: 
-    wrap: 72
----
-
 # ds456-capstone_aki-hanna-yosephine
 
 Aki Wada, Hanna Chang, and Yosephine Manihuruk
 
 ## Research Question
 
-> How can we identify redundant/unique segments in public transit routes
-> and micro mobility data in Minneapolis, and how can we use the
-> observations to optimize inter-Minneapolis travel?
+> How can we identify redundant/unique segments in public transit routes and micro mobility data in Minneapolis, and how can we use the observations to optimize inter-Minneapolis travel?
 
 ## Motivation
 
-Our project stemmed from our shared interest in spacial data analysis,
-one of its specific trait being its versatility. We agreed upon
-transportation, and more specifically public transit and micro mobility.
+Our project stemmed from our shared interest in spacial data analysis, one of its specific trait being its versatility. We agreed upon transportation, and more specifically public transit and micro mobility.
 
-With the rise of urbanization, cities are facing increasing challenges
-in managing transportation systems efficiently. Redundant routes can
-lead to wasted resources, increased traffic congestion, and higher
-emissions. By identifying and optimizing these routes, we can improve
-the overall efficiency of public transit and micro mobility options in
-Minneapolis, making it easier for residents to navigate the city while
-reducing environmental impact.
+With the rise of urbanization, cities are facing increasing challenges in managing transportation systems efficiently. Redundant routes can lead to wasted resources, increased traffic congestion, and higher emissions. By identifying and optimizing these routes, we can improve the overall efficiency of public transit and micro mobility options in Minneapolis, making it easier for residents to navigate the city while reducing environmental impact.
 
 ## Files
 
@@ -57,18 +41,15 @@ reducing environmental impact.
 
 **Nov 11:**
 
--   Group meeting prior to class, wrap up and rehearse for intermediate
-    class presentation
+-   Group meeting prior to class, wrap up and rehearse for intermediate class presentation
 
--   Begin construction for final visualization "deliverable" if time
-    allows
+-   Begin construction for final visualization "deliverable" if time allows
 
 -   Intermediate class presentation (All)
 
 **Nov 11-15:**
 
--   Final deliverable construction (individual + coordinate via
-    groupchat) (All/Yosephine)
+-   Final deliverable construction (individual + coordinate via groupchat) (All/Yosephine)
 
     -   Yosephine to share starter code
 
@@ -78,26 +59,21 @@ reducing environmental impact.
 
 **Nov 16:**
 
--   Group meeting to discuss progress on final deliverable and analysis
-    methods
+-   Group meeting to discuss progress on final deliverable and analysis methods
 
 **Nov 17:**
 
--   Meeting with Max Gonzalez & Jacob Wascalus (expert meeting as
-    required per class schedule, due 8am Nov 18) (All)
+-   Meeting with Max Gonzalez & Jacob Wascalus (expert meeting as required per class schedule, due 8am Nov 18) (All)
 
--   Post-meeting notes and action items into a document for submission
-    (Hanna)
+-   Post-meeting notes and action items into a document for submission (Hanna)
 
 **Nov 20:**
 
--   Work day in class, begin final assignment (FP6 or Teaching a New
-    Skill) (All)
+-   Work day in class, begin final assignment (FP6 or Teaching a New Skill) (All)
 
 **Nov 23:**
 
--   Remote deadline to complete final assignment as a group, ready for
-    submission
+-   Remote deadline to complete final assignment as a group, ready for submission
 
 ## Group Member Contributions to the Intermediate Materials Assignment
 
