@@ -24,6 +24,11 @@ reducing environmental impact.
 
 ## Files
 
+| File | Description |
+|--------------|-------------|
+| `DataConcat.qmd` | Code for connecting public transit data, with cleaning. |
+| `TransitExp.qmd` | Code for GTFS data familiarity and exploratory visualizations |
+
 ## Datasets/Data Source
 
 | File/Folder | Description | Source Link |
