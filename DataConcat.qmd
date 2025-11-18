@@ -176,6 +176,7 @@ transit_trips_common <- gtfs_trips_full %>%
 ```
 
 ## Once open data request is fulfilled and we get the centerline data
+
 ```{r, warning=FALSE, message=FALSE, eval=FALSE}
 scooter_trips_common <- scooter_clean %>%
   transmute(
@@ -219,13 +220,13 @@ scooter_trips_common <- scooter_clean %>%
 ```
 
 ## Combine transit + micromobility
+
 ```{r, warning=FALSE, message=FALSE, eval=FALSE}
 unified_trips <- bind_rows(
   transit_trips_common,
   scooter_trips_common
 )
 ```
-
 
 # Export unified data
 
@@ -238,8 +239,3 @@ data_unified <- list(
 
 readr::write_csv(unified_trips, file.path(data_dir, "unified_trips.csv"))
 ```
-
-
-
-
-
