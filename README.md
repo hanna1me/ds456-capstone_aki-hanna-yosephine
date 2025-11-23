@@ -71,16 +71,25 @@ With the rise of urbanization, cities are facing increasing challenges in managi
 **Nov 17:**
 
 -   [ ] Meeting with Max Gonzalez & Jacob Wascalus (expert meeting as required per class schedule, due 8am Nov 18) (All)
+        - Cancelled
 
 -   [ ] Post-meeting notes and action items into a document for submission (Hanna)
 
-**Nov 20:**
-
--   [ ] Work day in class, begin final assignment (FP6 or Teaching a New Skill) (All)
-
 **Nov 23:**
 
--   [ ] Remote deadline to complete final assignment as a group, ready for submission
+-   [x] Group meeting
+
+**Nov 24**
+-   [ ] Group meeting with instructor
+
+**Nov 26-30**
+*Break*
+-   [ ] Micomobility & public transit route gaps identification (Hanna)
+-   [ ] Debug and troubleshoot data dashboard (Yosephine)
+-   [ ] Continue final narrative (Aki)
+
+**Dec 04**
+-   [ ] Meeting with Jacob Wascalus @ 11am
 
 ## Group Member Contributions to the Intermediate Materials Assignment
 
