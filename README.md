@@ -31,49 +31,49 @@ With the rise of urbanization, cities are facing increasing challenges in managi
 
 **Nov 10:**
 
--   Finalize data exploration and exploratory data visualization (All)
+-   [x] Finalize data exploration and exploratory data visualization (All)
 
--   Group meeting for the intermediate class presentation
+-   [x] Group meeting for the intermediate class presentation
 
--   Class presentation slides prep. (Aki)
+-   [x] Class presentation slides prep. (Aki)
 
--   Intermediate narrative Github repo (Hanna)
+-   [x] Intermediate narrative Github repo (Hanna)
 
 **Nov 11:**
 
--   Group meeting prior to class, wrap up and rehearse for intermediate class presentation
+-   [ ] Group meeting prior to class, wrap up and rehearse for intermediate class presentation
 
--   Begin construction for final visualization "deliverable" if time allows
+-   [x] Begin construction for final visualization "deliverable" if time allows
 
--   Intermediate class presentation (All)
+-   [x] Intermediate class presentation (All)
 
 **Nov 11-15:**
 
--   Final deliverable construction (individual + coordinate via groupchat) (All/Yosephine)
+-   [x] Final deliverable construction (individual + coordinate via groupchat) (All/Yosephine)
 
-    -   Yosephine to share starter code
+    -   [x] Yosephine to share starter code
 
--   Begin brainstorming and drafting analysis methods (Hanna)
+-   [x] Begin brainstorming and drafting analysis methods (Hanna)
 
--   Create outline for final report (Aki)
+- [ ] Create outline for final report (Aki)
 
 **Nov 16:**
 
--   Group meeting to discuss progress on final deliverable and analysis methods
+-   [x] Group meeting to discuss progress on final deliverable and analysis methods
 
 **Nov 17:**
 
--   Meeting with Max Gonzalez & Jacob Wascalus (expert meeting as required per class schedule, due 8am Nov 18) (All)
+-   [ ] Meeting with Max Gonzalez & Jacob Wascalus (expert meeting as required per class schedule, due 8am Nov 18) (All)
 
--   Post-meeting notes and action items into a document for submission (Hanna)
+-   [ ] Post-meeting notes and action items into a document for submission (Hanna)
 
 **Nov 20:**
 
--   Work day in class, begin final assignment (FP6 or Teaching a New Skill) (All)
+-   [ ] Work day in class, begin final assignment (FP6 or Teaching a New Skill) (All)
 
 **Nov 23:**
 
--   Remote deadline to complete final assignment as a group, ready for submission
+-   [ ] Remote deadline to complete final assignment as a group, ready for submission
 
 ## Group Member Contributions to the Intermediate Materials Assignment
 
