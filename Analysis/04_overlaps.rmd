@@ -1,0 +1,100 @@
+---
+title: "04 Overlap Metric"
+author: "Yosephine Manihuruk"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+library(sf)
+library(dplyr)
+library(tidyr)
+crs_proj <- 26915
+
+```
+
+```{r}
+trip_proximity  <- readRDS("../Analysis/data/trip_proximity.rds")
+stops           <- readRDS("../Analysis/data/stops_gtfs.rds")
+stop_times      <- readRDS("../Analysis/data/stop_times.rds")
+trips_gtfs      <- readRDS("../Analysis/data/trips_gtfs.rds")
+routes_gtfs     <- readRDS("../Analysis/data/routes_gtfs.rds")
+```
+
+```{r}
+sub_candidates <- trip_proximity %>%
+filter(trip_type == "sub_candidate") %>%
+select(trip_id, start_stop_id, end_stop_id)
+
+nrow(sub_candidates)
+head(sub_candidates)
+```
+
+```{r}
+stop_routes <- stop_times %>%
+select(trip_id, stop_id) %>%
+distinct() %>%
+left_join(
+trips_gtfs %>% select(trip_id, route_id),
+by = "trip_id"
+) %>%
+distinct(stop_id, route_id)
+
+head(stop_routes)
+```
+
+```{r}
+start_routes_lookup <- stop_routes %>%
+group_by(stop_id) %>%
+summarise(routes_start = list(route_id), .groups = "drop")
+
+end_routes_lookup <- stop_routes %>%
+group_by(stop_id) %>%
+summarise(routes_end = list(route_id), .groups = "drop")
+```
+```{r}
+trip_routes <- sub_candidates %>%
+left_join(
+start_routes_lookup,
+by = c("start_stop_id" = "stop_id")
+) %>%
+left_join(
+end_routes_lookup,
+by = c("end_stop_id" = "stop_id")
+) %>%
+rowwise() %>%
+mutate(
+shared_routes = list(
+if (!is.null(routes_start) && !is.null(routes_end)) {
+intersect(routes_start, routes_end)
+} else {
+integer(0)})) %>%
+ungroup()
+```
+```{r}
+same_route_trips <- trip_routes %>%
+  filter(lengths(shared_routes) > 0)
+
+nrow(same_route_trips)
+head(same_route_trips)
+
+```
+
+```{r}
+same_route_trips_expanded <- same_route_trips %>%
+tidyr::unnest(cols = c(shared_routes)) %>%
+rename(route_id = shared_routes) %>%
+left_join(
+routes_gtfs %>% select(route_id, route_short_name, route_long_name),
+by = "route_id"
+)
+```
+
+```{r}
+saveRDS(same_route_trips, "../Analysis/data/same_route_trips.rds")
+saveRDS(same_route_trips_expanded, "../Analysis/data/same_route_trips_expanded.rds")
+```
+

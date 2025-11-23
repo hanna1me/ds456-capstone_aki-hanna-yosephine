@@ -1,0 +1,109 @@
+---
+title: "01 Data Preparation"
+author: "Yosephine Manihuruk"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+library(sf)
+library(dplyr)
+library(readr)
+library(tidyr)
+```
+
+```{r}
+crs_proj <- 26915
+```
+
+## GTFS Stuff
+
+```{r}
+stops <- read_csv("../Data/gtfs/stops.csv")
+stop_times <- read_csv("../Data/gtfs/stop_times.csv")
+trips_gtfs <- read_csv("../Data/gtfs/trips.csv")
+routes_gtfs <- read_csv("../Data/gtfs/routes.csv")
+```
+
+```{r}
+stops_sf <- st_as_sf(
+stops,
+coords = c("stop_lon", "stop_lat"),
+crs = 4326
+) %>%
+st_transform(crs_proj)
+```
+
+```{r}
+road_centerlines <- st_read("../Data/MPLS_Centerline/MPLS_Centerline.shp") %>%
+st_transform(crs_proj)
+
+names(road_centerlines)
+```
+
+## Scooter trips
+
+```{r}
+trips <- read_csv("../Data/scooter_trips_2025.csv")
+
+trips <- trips %>%
+mutate(
+StartCenterlineID = as.integer(StartCenterlineID),
+EndCenterlineID = as.integer(EndCenterlineID)
+) %>%
+filter(
+!is.na(StartCenterlineID),
+!is.na(EndCenterlineID)
+) %>%
+mutate(trip_id = row_number()) # unique ID for joins later
+```
+
+```{r}
+valid_trips <- trips %>%
+filter(
+StartCenterlineID %in% road_centerlines$GBSID,
+EndCenterlineID %in% road_centerlines$GBSID)
+```
+
+```{r}
+trips_start <- valid_trips %>%
+left_join(
+road_centerlines %>% select(GBSID, geometry),
+by = c("StartCenterlineID" = "GBSID")
+) %>%
+rename(start_geometry = geometry) %>%
+st_as_sf(crs = crs_proj)
+
+trips_end <- valid_trips %>%
+left_join(
+road_centerlines %>% select(GBSID, geometry),
+by = c("EndCenterlineID" = "GBSID")
+) %>%
+rename(end_geometry = geometry) %>%
+st_as_sf(crs = crs_proj)
+
+start_points <- trips_start %>%
+mutate(geometry = st_centroid(start_geometry)) %>%
+select(trip_id, geometry)
+
+end_points <- trips_end %>%
+mutate(geometry = st_centroid(end_geometry)) %>%
+select(trip_id, geometry)
+```
+```{r}
+dir.create("../Analysis/data", showWarnings = FALSE)
+
+saveRDS(valid_trips, "../Analysis/data/valid_trips.rds")
+saveRDS(road_centerlines,"../Analysis/data/road_centerlines.rds")
+saveRDS(stops_sf, "../Analysis/data/stops_sf.rds")
+saveRDS(start_points, "../Analysis/data/start_points.rds")
+saveRDS(end_points, "../Analysis/data/end_points.rds")
+saveRDS(stops, "../Analysis/data/stops_gtfs.rds")
+saveRDS(stop_times, "../Analysis/data/stop_times.rds")
+saveRDS(trips_gtfs, "../Analysis/data/trips_gtfs.rds")
+saveRDS(routes_gtfs, "../Analysis/data/routes_gtfs.rds")
+```
+

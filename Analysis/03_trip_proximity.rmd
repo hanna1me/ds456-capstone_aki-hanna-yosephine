@@ -1,0 +1,57 @@
+---
+title: "03 Transit Proximity & Trip Types"
+author: "Yosephine Manihuruk"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+So, the idea is to categorize each trip. If both start and end points are near a bus stop, then that trip is a "sub_candidate" (which we will check later if both stops share same routes). If only the start point is near a bus stop, then it is a "last_mile" transportation. If only the end point is near a bus stop then it is a "first_mile" transportation.
+
+```{r}
+library(sf)
+library(dplyr)
+library(readr)
+library(tidyr)
+crs_proj <- 26915
+```
+
+```{r}
+valid_trips <- readRDS("../Analysis/data/valid_trips.rds")
+stops_sf <- readRDS("../Analysis/data/stops_sf.rds")
+start_points <- readRDS("../Analysis/data/start_points.rds")
+end_points <- readRDS("../Analysis/data/end_points.rds")
+```
+
+```{r}
+stops_buffer <- st_buffer(stops_sf, dist = 200)
+
+start_near <- st_join(start_points, stops_buffer, join = st_within, left = TRUE) %>%
+mutate(near_start_stop = !is.na(stop_id)) %>%
+select(trip_id, near_start_stop, start_stop_id = stop_id)
+
+end_near <- st_join(end_points, stops_buffer, join = st_within, left = TRUE) %>%
+mutate(near_end_stop = !is.na(stop_id)) %>%
+select(trip_id, near_end_stop, end_stop_id = stop_id)
+```
+
+```{r}
+trip_proximity <- valid_trips %>%
+select(trip_id) %>%
+left_join(start_near, by = "trip_id") %>%
+left_join(end_near, by = "trip_id") %>%
+mutate(
+trip_type = case_when(
+near_start_stop & near_end_stop ~ "sub_candidate",
+near_start_stop & !near_end_stop ~ "last_mile",
+!near_start_stop & near_end_stop ~ "first_mile",
+TRUE ~ "none"))
+
+table(trip_proximity$trip_type)
+```
+
+```{r}
+saveRDS(trip_proximity, "../Analysis/data/trip_proximity.rds")
+```

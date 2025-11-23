@@ -1,0 +1,209 @@
+---
+title: "Dashboard"
+author: "Yosephine Manihuruk"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+library(shiny)
+library(leaflet)
+library(dplyr)
+library(sf)
+library(tmap)
+library(DT)
+library(viridis)
+```
+```{r}
+valid_trips <- readRDS("../Analysis/data/valid_trips.rds")
+start_points <- readRDS("../Analysis/data/start_points.rds")
+end_points <- readRDS("../Analysis/data/end_points.rds")
+stops_sf <- readRDS("../Analysis/data/stops_sf.rds")
+
+road_centerlines <- readRDS("../Analysis/data/road_centerlines.rds")
+trip_proximity <- readRDS("../Analysis/data/trip_proximity.rds")
+same_route_trips_expanded <- readRDS("../Analysis/data/same_route_trips_expanded.rds")
+```
+
+```{r}
+start_points <- st_as_sf(start_points)
+end_points   <- st_as_sf(end_points)
+stops_sf     <- st_as_sf(stops_sf)
+road_centerlines <- st_as_sf(road_centerlines)
+```
+```{r}
+
+fix_point_geometry <- function(df, point_col = "geometry") {
+
+  geom_cols <- names(df)[sapply(df, inherits, "sfc")]
+
+  cols_to_drop <- setdiff(geom_cols, point_col)
+
+  if (length(cols_to_drop) > 0) {
+    df <- df[, !(names(df) %in% cols_to_drop)]
+  }
+
+  st_geometry(df) <- point_col
+  df
+}
+
+start_points <- fix_point_geometry(start_points, "geometry")
+end_points   <- fix_point_geometry(end_points,   "geometry")
+```
+
+```{r}
+start_points_ll <- st_transform(start_points, 4326)
+end_points_ll   <- st_transform(end_points,   4326)
+stops_ll        <- st_transform(stops_sf,     4326)
+road_centerlines_ll <- st_transform(road_centerlines, 4326)
+```
+
+```{r}
+grid <- st_make_grid(st_union(road_centerlines), cellsize = 200) %>%
+st_sf() %>%
+mutate(grid_id = row_number())
+
+grid_density <- st_join(grid, start_points) %>% 
+st_drop_geometry() %>%
+count(grid_id, name = "n") %>%
+right_join(grid, by = "grid_id") %>%
+mutate(n = if_else(is.na(n), 0L, n)) %>%
+st_as_sf()
+
+grid_density_nonzero <- grid_density %>% filter(n > 1)
+max_cutoff <- quantile(grid_density_nonzero$n, 0.99, na.rm = TRUE)
+
+grid_density_nonzero <- grid_density_nonzero %>%
+mutate(n_trimmed = pmin(n, max_cutoff))
+
+grid_density_nonzero_ll <- st_transform(grid_density_nonzero, 4326)
+```
+```{r}
+ui <- navbarPage(
+
+"Scooter & Transit Dashboard Prototype",
+
+tabPanel("Trip Density",
+leafletOutput("densityMap", height = "650px")),
+
+tabPanel("Transit Proximity",
+sidebarLayout(
+sidebarPanel(
+checkboxGroupInput(
+"trip_type_filter",
+"Select Trip Types:",
+choices = c(
+"sub_candidate",
+"first_mile",
+"last_mile",
+"none"),
+selected = c("sub_candidate", "first_mile", "last_mile", "none")
+)),
+mainPanel(
+leafletOutput("proximityMap", height = "650px")
+))),
+
+tabPanel("Same-Route Substitution",
+sidebarLayout(
+sidebarPanel(
+selectInput(
+"route_select",
+"Select Route:",
+choices = sort(unique(same_route_trips_expanded$route_short_name))
+)),
+mainPanel(
+leafletOutput("subMap", height = "650px"),
+br(),
+DTOutput("subTable")
+))))
+```
+
+```{r}
+server <- function(input, output, session) {
+
+#---------------- TAB 1: DENSITY ----------------#
+output$densityMap <- renderLeaflet({
+pal <- colorNumeric("YlOrRd", domain = grid_density_nonzero_ll$n_trimmed)
+
+leaflet() %>%
+addProviderTiles(providers$OpenStreetMap) %>%
+addPolygons(
+data = grid_density_nonzero_ll,
+fillColor = ~pal(n_trimmed),
+fillOpacity = 0.7,
+weight = 0,
+stroke = FALSE
+)
+})
+
+#---------------- TAB 2: PROXIMITY ----------------#
+output$proximityMap <- renderLeaflet({
+
+df <- start_points_ll %>%
+left_join(trip_proximity %>% select(trip_id, trip_type), by = "trip_id") %>%
+filter(trip_type %in% input$trip_type_filter)
+
+pal <- colorFactor(
+palette = c("darkblue", "darkgreen", "orange", "gray"),
+levels = c("sub_candidate", "first_mile", "last_mile", "none")
+)
+
+leaflet() %>%
+addProviderTiles(providers$CartoDB.Positron) %>%
+addCircleMarkers(
+data = df,
+radius = 4,
+stroke = FALSE,
+fillOpacity = 0.8,
+color = ~pal(trip_type),
+popup = ~paste("Trip ID:", trip_id, "Type:", trip_type)
+)
+})
+
+#---------------- TAB 3: SAME-ROUTE SUB ----------------#
+output$subMap <- renderLeaflet({
+
+selected <- same_route_trips_expanded %>%
+filter(route_short_name == input$route_select)
+
+starts_filtered <- start_points_ll %>%
+filter(trip_id %in% selected$trip_id)
+
+ends_filtered <- end_points_ll %>%
+filter(trip_id %in% selected$trip_id)
+
+leaflet() %>%
+addProviderTiles(providers$OpenStreetMap) %>%
+addCircleMarkers(
+data = starts_filtered,
+color = "darkblue",
+radius = 3,
+opacity = 0.8,
+fillOpacity = 0.8,
+popup = ~paste("Trip ID:", trip_id)
+) %>%
+addCircleMarkers(
+data = ends_filtered,
+color = "violet",
+radius = 3,
+opacity = 0.8,
+fillOpacity = 0.8,
+popup = ~paste("Trip ID:", trip_id)
+)
+})
+
+output$subTable <- renderDT({
+same_route_trips_expanded %>%
+filter(route_short_name == input$route_select)
+})
+
+}
+```
+
+```{r}
+shinyApp(ui, server)
+```
+
