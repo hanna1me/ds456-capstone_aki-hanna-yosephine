@@ -18,14 +18,21 @@ With the rise of urbanization, cities are facing increasing challenges in managi
 |-------------------------------------|-----------------------------------|
 | `DataConcat.qmd` | Code for connecting public transit data, with cleaning. |
 | `TransitExp.qmd` | Code for GTFS data familiarity and exploratory visualizations |
+| Exploratory/`Yosephine_FP2.zip` | Contains `.qmd` and `.html` files along with datasets. This FP2 shows two viz: *commuting patterns “by other means” in the Twin Cities metro area* using census data and *daily bike rider counts in 2022 for Hennepin, Ramsey, and Washington Counties*. | 
+| Dashboard/`01_data_prep.md` | Code to clean and prep data files. |
+| Dashboard/`02_trip_density.md` | Code to visualize trip start times density plot. |
+| Dashboard/`03_trip_proximity.md` | Code to wrangle more data for following steps. |
+| Dashboard/`04_overlaps.md` | Code to identity route overlaps, and export the data. |
+| Dashboard/`dashboard_prototype.md` | Code for the data dashboard prototype (draft). |
+| Dashboard/data | All data exports created from the `.md` codes in Dashboard folder. |
 
 ## Datasets/Data Source
 
 | File/Folder | Description | Source Link |
 |-------------------------|-----------------------|-------------------------|
-| `GTFS20201128.zip` | **Must be downloaded and upzipped. File size too large to upload to repo.** <br><br> Contains detailed information about public transit routes, stops, and schedules in Minneapolis in the week of November 28, 2020. <br><br>**Notes:** All datasets must be concatenated into one GTFS dataset for analysis for a given timeframe. | <https://gtfs.org/> <br> <https://svc.metrotransit.org/mtgtfs/archive/> |
-| `MNPSC_City_Boundary` | Shapefile and `.csv` of Minneapolis city boundary. | <https://opendata.minneapolismn.gov/search?groupIds=1390110900e456482f79> |
-| `Yosephine_FP2` | `.qmd` and `.html` files along with datasets. This FP2 shows two viz: *commuting patterns “by other means” in the Twin Cities metro area* using census data and *daily bike rider counts in 2022 for Hennepin, Ramsey, and Washington Counties*. |  |
+| Data/`GTFS20201128.zip` | **Must be downloaded and upzipped. File size too large to upload to repo.** <br><br> Contains detailed information about public transit routes, stops, and schedules in Minneapolis in the week of November 28, 2020. <br><br>**Notes:** All datasets must be concatenated into one GTFS dataset for analysis for a given timeframe. | <https://gtfs.org/> <br> <https://svc.metrotransit.org/mtgtfs/archive/> |
+| Data/`MNPSC_City_Boundary` | Shapefile and `.csv` of Minneapolis city boundary. | <https://opendata.minneapolismn.gov/search?groupIds=1390110900e456482f79> |
+| Data/`scooter_trips_2025.csv` | A `.csv` file of micromobility in the Twin Cities area. | <https://opendata.minneapolismn.gov> via data request |
 
 ## Rest Of The Semester Plan
 
