@@ -1,0 +1,56 @@
+---
+title: "Final Narrative"
+author: "Hanna Chang"
+format: html
+editor: visual
+---
+
+# Projects in Data Science: A Crossover of Micromobility and Public Transportation in Minneapolis
+
+*Aki Wada, Hanna Chang, and Yosephine Manihuruk*
+
+## Project Summary
+
+## Research Question
+
+> How can we identify redundant/unique segments in public transit routes and micro mobility data in Minneapolis, and how can we use the observations to optimize inter-Minneapolis travel?
+
+**Motivation**
+
+Our project stemmed from our shared interest in spacial data analysis, one of its specific trait being its versatility. We agreed upon transportation, and more specifically public transit and micro mobility.
+
+With the rise of urbanization, cities are facing increasing challenges in managing transportation systems efficiently. Redundant routes can lead to wasted resources, increased traffic congestion, and higher emissions. By identifying and optimizing these routes, we can improve the overall efficiency of public transit and micro mobility options in Minneapolis, making it easier for residents to navigate the city while reducing environmental impact.
+
+## Data
+
+## Result
+
+## Analysis
+
+The spatial distribution of micromobility trip-starts across Minneapolis reveals a highly clustered pattern centered around the city’s urban core, with density diminishing progressively toward peripheral neighborhoods. The highest-intensity cells, representing between 1,600 and over 6,000 trip starts per week, are concentrated in and around Downtown Minneapolis, the University of Minnesota area, and the Uptown/Lyn-Lake corridor. These zones represent areas with high population density, commercial activity, and strong transit connectivity, suggesting that micromobility usage is most heavily driven by demand for short, urban trips that complement existing transportation infrastructure.
+
+A notable feature of the map is the steep gradient in activity around major lakes and parks, where the absence of grid cells corresponds to water bodies and green spaces. Adjacent to these areas, trip densities often remain moderate (50–400 trips per grid), indicating that recreational ridership contributes meaningfully, although not as strongly as utilitarian travel found in the downtown corridors.
+
+Trip density also appears to align with major transit lines and corridors. The presence of consistently moderate-to-high density cells along Hennepin Avenue, University Avenue, Lake Street, and Portland–Park suggests that micromobility trips function as a first-mile/last-mile link to public transit. This is consistent with known behavior in cities where shared bikes and scooters support multimodal movement patterns. Outlying residential neighborhoods such as Nokomis, Camden, or parts of Northeast show sparse usage, reflecting lower trip demand, reduced station/service availability, or longer trip distances less suited for micromobility.
+
+There are also patches of “missing” data representing grid cells with insufficient trip volume or no available service. These occur primarily near the edges of the city boundary or in low-density residential zones. Their presence helps confirm that the observed hotspots are not artifacts but are genuinely supported by service distribution and user behavior.
+
+Overall, the density map highlights a clear spatial hierarchy of micromobility use: highest in mixed-use urban centers, moderate in surrounding commercial corridors, and lowest in dispersed residential areas. These findings support the idea that micromobility is most valuable in dense, walkable environments where short trips are optimal and transit access is high.
+
+## Method Evaluation & Limitations
+
+While the grid-based density mapping provides a detailed and intuitive view of how micromobility demand varies across Minneapolis, several methodological considerations influence the interpretation of results.
+
+First, the choice of grid size strongly shapes the apparent concentration of trips. Smaller grids give more localized detail but can exaggerate noise, while larger grids smooth transitions and may mask meaningful micro-spatial patterns. Although the selected grid seems to balance clarity with granularity, results should be contextualized in relation to this design choice.
+
+Second, density values represent raw counts rather than normalized rates. High-density zones may reflect not only true user demand but also differences in device availability, operator service priorities, or the permitted riding zones defined by vendors. Areas with low or missing values may not indicate lack of demand but rather policy-based or supply-based restrictions (e.g., geofencing, maintenance gaps, or availability biases). Without incorporating supply-side metrics, the map reflects observed usage rather than potential or unmet demand.
+
+Additionally, this analysis does not incorporate temporal variability. Trip patterns fluctuate sharply by time of day, day of week, and season, especially in a city with pronounced winter constraints like Minneapolis. A single aggregated density map conceals these temporal dynamics and may overrepresent peak-season or peak-hour behavior.
+
+Finally, the analysis does not directly account for socioeconomic factors or land use conditions. Micromobility access and usage are known to vary with income, housing density, employment centers, campus activity, and retail clusters. Without integrating census, zoning, or transit frequency data, the explanation of observed patterns remains associative rather than causal.
+
+Despite these limitations, the grid-based density approach provides a strong spatial foundation for understanding micromobility patterns across Minneapolis. It effectively highlights hotspots, reveals multimodal connections, and guides future steps such as integrating environmental variables, transit data, and temporal patterns to form a more holistic mobility assessment.
+
+## Member Contributions
+
+## AI Statement
