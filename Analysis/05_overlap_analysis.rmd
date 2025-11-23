@@ -1,0 +1,122 @@
+---
+title: "05 Overlap Analysis"
+author: "Yosephine Manihuruk"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r}
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+library(scales)
+
+same_route_trips_expanded <- readRDS("../analysis/data/same_route_trips_expanded.rds")
+valid_trips <- readRDS("../analysis/data/valid_trips.rds")
+
+```
+
+
+```{r}
+overlap_trips <- same_route_trips_expanded %>% left_join(valid_trips, by = "trip_id")
+```
+
+```{r}
+overlap_trips <- overlap_trips %>%
+  mutate(
+    start_time = ymd_hms(StartTime),
+    date = as_date(start_time),
+    hour = hour(start_time),
+    weekday = wday(start_time, label = TRUE),
+    day_type = if_else(weekday %in% c("Sat", "Sun"), "Weekend", "Weekday")
+  )
+```
+# aggregate the hourly overlap by day, because weekdays have more days than weekends
+
+```{r}
+hourly_overlap <- overlap_trips %>%
+  count(hour)
+
+ggplot(hourly_overlap, aes(x = hour, y = n)) +
+  geom_col(fill = "darkred") +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    title = "Overlapping Scooter Trips by Hour of Day",
+    x = "Hour (0 = Midnight)",
+    y = "Number of Trips"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+daily_counts <- overlap_trips %>%
+  count(date, day_type)
+```
+
+
+```{r}
+avg_daily_overlap <- daily_counts %>%
+  group_by(day_type) %>%
+  summarise(
+    avg_trips_per_day = mean(n),
+    days_count = n()
+  )
+
+avg_daily_overlap
+```
+
+```{r}
+ggplot(avg_daily_overlap, aes(x = day_type, y = avg_trips_per_day, fill = day_type)) +
+  geom_col() +
+  scale_fill_manual(values = c("Weekday" = "#21908d", "Weekend" = "#3b528b")) +
+  labs(
+    title = "Average Overlapping Trips per Day",
+    subtitle = "Adjusted for number of weekdays vs weekends",
+    x = "",
+    y = "Average trips per day"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+```
+```{r}
+overlap_trips %>%
+  group_by(hour, day_type) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  ggplot(aes(x = hour, y = n, color = day_type)) +
+  scale_color_manual(values = c("Weekday" = "#21908d", "Weekend" = "#3b528b")) +
+  geom_line(size = 1.2) +
+  scale_x_continuous(breaks = 0:23) +
+  labs(
+    title = "Hourly Overlap Pattern: Weekday vs Weekend",
+    x = "Hour",
+    y = "Number of Overlapping Trips"
+  ) +
+  theme_classic()
+```
+```{r}
+ggplot(overlap_trips, aes(x = TripDuration/60)) +
+  geom_histogram(fill = "#440154", bins = 40) +
+  labs(
+    title = "Distribution of Overlapping Trip Durations",
+    x = "Trip Duration (minutes)",
+    y = "Number of Trips"
+  ) +
+  theme_minimal() +
+  xlim(0, 100)
+``` 
+```{r}
+ggplot(overlap_trips, aes(x = TripDuration/60, fill = day_type)) +
+  geom_histogram(alpha = 0.6, bins = 40, position = "identity") +
+  labs(
+    title = "Trip Duration Distribution by Day Type",
+    x = "Duration (minutes)",
+    y = "Trips"
+  ) +
+  theme_minimal() +
+  xlim(0, 100) 
+```
+
