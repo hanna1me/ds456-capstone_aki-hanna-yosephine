@@ -19,23 +19,72 @@ crs_proj <- 26915
 ```
 
 ```{r}
-valid_trips <- readRDS("../Analysis/data/valid_trips.rds")
-stops_sf <- readRDS("../Analysis/data/stops_sf.rds")
-start_points <- readRDS("../Analysis/data/start_points.rds")
-end_points <- readRDS("../Analysis/data/end_points.rds")
+valid_trips <- readRDS("../Dashboard/data/valid_trips.rds")
+stops_sf <- readRDS("../Dashboard/data/stops_sf.rds")
+start_segments <- readRDS("../Dashboard/data/start_points.rds")
+end_segments <- readRDS("../Dashboard/data/end_points.rds")
 ```
 
 ```{r}
-stops_buffer <- st_buffer(stops_sf, dist = 200)
+start_buffered <- st_buffer(start_segments, dist = 30)
+end_buffered   <- st_buffer(end_segments,   dist = 30)
 
-start_near <- st_join(start_points, stops_buffer, join = st_within, left = TRUE) %>%
-mutate(near_start_stop = !is.na(stop_id)) %>%
-select(trip_id, near_start_stop, start_stop_id = stop_id)
+start_near <- st_join(start_buffered,stops_sf,join = st_intersects,left = TRUE) %>%
+  mutate(near_start_stop = !is.na(stop_id)) %>%
+  select(trip_id, near_start_stop, start_stop_id = stop_id)
 
-end_near <- st_join(end_points, stops_buffer, join = st_within, left = TRUE) %>%
-mutate(near_end_stop = !is.na(stop_id)) %>%
-select(trip_id, near_end_stop, end_stop_id = stop_id)
+end_near <- st_join(end_buffered,stops_sf,join = st_intersects,left = TRUE) %>%
+  mutate(near_end_stop = !is.na(stop_id)) %>%
+  select(trip_id, near_end_stop, end_stop_id = stop_id)
 ```
+
+```{r}
+library(tmap)
+
+set.seed(1)
+sample_ids <- sample(start_segments$trip_id, 50)
+
+sample_segments <- start_segments %>%
+  filter(trip_id %in% sample_ids)
+
+sample_buffers <- st_buffer(sample_segments, dist = 30)
+
+plot_stops <- stops_sf
+
+tmap_mode("view")
+
+tm_basemap("OpenStreetMap") +
+  tm_shape(sample_buffers) +
+  tm_polygons(col = "lightblue", alpha = 0.4, border.col = "blue") +
+  
+  tm_shape(sample_segments) +
+  tm_lines(col = "red", lwd = 2) +
+
+  tm_shape(plot_stops) +
+  tm_dots(col = "black", size = 0.05, alpha = 0.7)
+```
+
+```{r}
+thresholds <- c(20,30,40,50,75,100)
+
+results <- lapply(thresholds, function(dist) {
+  start_n <- st_join(st_buffer(start_segments, dist),
+                     stops_sf, join = st_intersects) %>%
+    mutate(near = !is.na(stop_id)) %>% pull(near) %>% sum()
+
+  end_n <- st_join(st_buffer(end_segments, dist),
+                   stops_sf, join = st_intersects) %>%
+    mutate(near = !is.na(stop_id)) %>% pull(near) %>% sum()
+
+  tibble(threshold = dist, start_hits = start_n, end_hits = end_n)
+}) %>%
+  bind_rows()
+
+results
+```
+
+
+
 
 ```{r}
 trip_proximity <- valid_trips %>%
@@ -53,5 +102,20 @@ table(trip_proximity$trip_type)
 ```
 
 ```{r}
-saveRDS(trip_proximity, "../Analysis/data/trip_proximity.rds")
+saveRDS(trip_proximity, "../Dashboard/data/trip_proximity.rds")
 ```
+
+```{r}
+percentage_trips <- trip_proximity %>%
+  select(trip_id, trip_type) %>% 
+  group_by(trip_id) %>%
+  summarise(trip_type = first(trip_type)) %>% 
+  ungroup() %>%
+  count(trip_type) %>%
+  mutate(percentage = n / sum(n) * 100)
+  
+
+percentage_trips
+  
+```
+

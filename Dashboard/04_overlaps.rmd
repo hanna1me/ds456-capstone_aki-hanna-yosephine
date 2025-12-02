@@ -17,11 +17,11 @@ crs_proj <- 26915
 ```
 
 ```{r}
-trip_proximity  <- readRDS("../Analysis/data/trip_proximity.rds")
-stops           <- readRDS("../Analysis/data/stops_gtfs.rds")
-stop_times      <- readRDS("../Analysis/data/stop_times.rds")
-trips_gtfs      <- readRDS("../Analysis/data/trips_gtfs.rds")
-routes_gtfs     <- readRDS("../Analysis/data/routes_gtfs.rds")
+trip_proximity  <- readRDS("../Dashboard/data/trip_proximity.rds")
+stops           <- readRDS("../Dashboard/data/stops_gtfs.rds")
+stop_times      <- readRDS("../Dashboard/data/stop_times.rds")
+trips_gtfs      <- readRDS("../Dashboard/data/trips_gtfs.rds")
+routes_gtfs     <- readRDS("../Dashboard/data/routes_gtfs.rds")
 ```
 
 ```{r}
@@ -57,22 +57,14 @@ summarise(routes_end = list(route_id), .groups = "drop")
 ```
 ```{r}
 trip_routes <- sub_candidates %>%
-left_join(
-start_routes_lookup,
-by = c("start_stop_id" = "stop_id")
-) %>%
-left_join(
-end_routes_lookup,
-by = c("end_stop_id" = "stop_id")
-) %>%
-rowwise() %>%
-mutate(
-shared_routes = list(
-if (!is.null(routes_start) && !is.null(routes_end)) {
-intersect(routes_start, routes_end)
-} else {
-integer(0)})) %>%
-ungroup()
+  left_join(start_routes_lookup,by = c("start_stop_id" = "stop_id")) %>%
+  left_join(end_routes_lookup,by = c("end_stop_id" = "stop_id")) %>%
+  rowwise() %>%
+  mutate(shared_routes = list(
+    if (!is.null(routes_start) && !is.null(routes_end)) {intersect(routes_start, routes_end)} 
+    else {integer(0)})) %>% 
+  ungroup()
+
 ```
 ```{r}
 same_route_trips <- trip_routes %>%
@@ -94,7 +86,7 @@ by = "route_id"
 ```
 
 ```{r}
-saveRDS(same_route_trips, "../Analysis/data/same_route_trips.rds")
-saveRDS(same_route_trips_expanded, "../Analysis/data/same_route_trips_expanded.rds")
+saveRDS(same_route_trips, "../Dashboard/data/same_route_trips.rds")
+saveRDS(same_route_trips_expanded, "../Dashboard/data/same_route_trips_expanded.rds")
 ```
 

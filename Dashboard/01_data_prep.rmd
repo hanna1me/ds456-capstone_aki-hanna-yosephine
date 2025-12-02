@@ -13,6 +13,8 @@ library(sf)
 library(dplyr)
 library(readr)
 library(tidyr)
+library(tidycensus)
+options(tigris_use_cache = TRUE)
 ```
 
 ```{r}
@@ -26,6 +28,7 @@ stops <- read_csv("../Data/gtfs/stops.csv")
 stop_times <- read_csv("../Data/gtfs/stop_times.csv")
 trips_gtfs <- read_csv("../Data/gtfs/trips.csv")
 routes_gtfs <- read_csv("../Data/gtfs/routes.csv")
+
 ```
 
 ```{r}
@@ -58,7 +61,7 @@ filter(
 !is.na(StartCenterlineID),
 !is.na(EndCenterlineID)
 ) %>%
-mutate(trip_id = row_number()) # unique ID for joins later
+mutate(trip_id = row_number())
 ```
 
 ```{r}
@@ -85,25 +88,97 @@ by = c("EndCenterlineID" = "GBSID")
 rename(end_geometry = geometry) %>%
 st_as_sf(crs = crs_proj)
 
-start_points <- trips_start %>%
-mutate(geometry = st_centroid(start_geometry)) %>%
-select(trip_id, geometry)
+start_segments <- trips_start %>%
+select(trip_id, start_geometry)
 
-end_points <- trips_end %>%
-mutate(geometry = st_centroid(end_geometry)) %>%
-select(trip_id, geometry)
+end_segments <- trips_end %>%
+select(trip_id, end_geometry)
 ```
 ```{r}
-dir.create("../Analysis/data", showWarnings = FALSE)
+state  <- "MN"
+counties <- c("Hennepin")  
+year   <- 2023
+```
 
-saveRDS(valid_trips, "../Analysis/data/valid_trips.rds")
-saveRDS(road_centerlines,"../Analysis/data/road_centerlines.rds")
-saveRDS(stops_sf, "../Analysis/data/stops_sf.rds")
-saveRDS(start_points, "../Analysis/data/start_points.rds")
-saveRDS(end_points, "../Analysis/data/end_points.rds")
-saveRDS(stops, "../Analysis/data/stops_gtfs.rds")
-saveRDS(stop_times, "../Analysis/data/stop_times.rds")
-saveRDS(trips_gtfs, "../Analysis/data/trips_gtfs.rds")
-saveRDS(routes_gtfs, "../Analysis/data/routes_gtfs.rds")
+```{r}
+acs_vars <- c(
+  median_income  = "B19013_001",
+  population     = "B01003_001",
+  hh_total       = "B08201_001",
+  hh_zero_veh    = "B08201_002"
+)
+```
+```{r}
+acs_raw <- get_acs(
+  geography = "tract",
+  variables = acs_vars,
+  state     = state,
+  county    = counties,
+  year      = year,
+  geometry  = TRUE,
+  output    = "wide"
+)
+```
+```{r}
+tracts_census_sf <- acs_raw %>%
+  st_transform(26915) %>% 
+  transmute(
+    GEOID,
+    median_income   = median_incomeE,
+    population      = populationE,
+    hh_total        = hh_totalE,
+    hh_zero_veh     = hh_zero_vehE,
+    zero_car_share  = if_else(hh_total > 0, hh_zero_veh / hh_total, NA_real_)
+  )
+```
+
+```{r}
+tracts_census_sf <- tracts_census_sf %>%
+  filter(!is.na(population))
+```
+
+```{r}
+boardings_csv <- read_csv("../Data/boarding_alighting/TransitStopsBoardingsAndAlightings2024.csv")
+names(boardings_csv)
+head(boardings_csv)
+```
+
+```{r}
+crs_proj <- 26915
+
+boardings_sf <- boardings_csv %>%
+  transmute(
+    stop_id   = as.character(Site_id),  
+    boardings = as.numeric(Ons),  
+    lon       = Longitude,               
+    lat       = Latitude                
+  ) %>%
+  st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
+  st_transform(crs_proj)
+```
+```{r}
+stops_sf <- readRDS("../Dashboard/data/stops_sf.rds")
+
+nearest_idx <- st_nearest_feature(boardings_sf, stops_sf)
+
+boardings_sf <- boardings_sf %>%
+  mutate(stop_id = stops_sf$stop_id[nearest_idx])
+```
+
+
+```{r}
+dir.create("../Dashboard/data", showWarnings = FALSE)
+
+saveRDS(valid_trips, "../Dashboard/data/valid_trips.rds")
+saveRDS(road_centerlines,"../Dashboard/data/road_centerlines.rds")
+saveRDS(stops_sf, "../Dashboard/data/stops_sf.rds")
+saveRDS(start_segments, "../Dashboard/data/start_points.rds")
+saveRDS(end_segments, "../Dashboard/data/end_points.rds")
+saveRDS(stops, "../Dashboard/data/stops_gtfs.rds")
+saveRDS(stop_times, "../Dashboard/data/stop_times.rds")
+saveRDS(trips_gtfs, "../Dashboard/data/trips_gtfs.rds")
+saveRDS(routes_gtfs, "../Dashboard/data/routes_gtfs.rds")
+saveRDS(tracts_census_sf, "../Dashboard/data/tracts_census_sf.rds")
+saveRDS(boardings_sf, "../Dashboard/data/stop_boardings_sf.rds")
 ```
 

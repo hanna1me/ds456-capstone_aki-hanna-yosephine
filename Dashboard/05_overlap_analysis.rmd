@@ -14,8 +14,8 @@ library(lubridate)
 library(ggplot2)
 library(scales)
 
-same_route_trips_expanded <- readRDS("../analysis/data/same_route_trips_expanded.rds")
-valid_trips <- readRDS("../analysis/data/valid_trips.rds")
+same_route_trips_expanded <- readRDS("../Dashboard/data/same_route_trips_expanded.rds")
+valid_trips <- readRDS("../Dashboard/data/valid_trips.rds")
 
 ```
 

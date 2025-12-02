@@ -1,0 +1,319 @@
+---
+title: "06 Story Analysis"
+author: "Yosephine Manihuruk"
+format: html
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+```{r, echo=FALSE}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(sf)
+library(lubridate)
+library(scales)
+library(viridis)
+library(tmap)
+```
+
+```{r}
+valid_trips <- readRDS("../Dashboard/data/valid_trips.rds")
+trip_proximity <- readRDS("../Dashboard/data/trip_proximity.rds")
+same_route_trips_expanded <- readRDS("../Dashboard/data/same_route_trips_expanded.rds")
+start_points <- readRDS("../Dashboard/data/start_points.rds") 
+end_points <- readRDS("../Dashboard/data/end_points.rds")
+stops_sf <- readRDS("../Dashboard/data/stops_sf.rds")
+road_centerlines <- readRDS("../Dashboard/data/road_centerlines.rds")
+tracts_census_sf <- readRDS("../Dashboard/data/tracts_census_sf.rds")
+boardings_sf <- readRDS("../Analysis/data/stop_boardings_sf.rds")
+```
+
+```{r}
+start_points <- st_as_sf(start_points)
+end_points <- st_as_sf(end_points)
+stops_sf <- st_as_sf(stops_sf)
+road_centerlines <- st_as_sf(road_centerlines)
+
+start_points <- st_transform(start_points, crs_proj)
+end_points <- st_transform(end_points, crs_proj)
+stops_sf <- st_transform(stops_sf, crs_proj)
+road_centerlines <- st_transform(road_centerlines, crs_proj)
+```
+```{r}
+sub_one_ids <- unique(same_route_trips_expanded$trip_id)
+
+behavior_df <- trip_proximity %>%
+mutate(
+behavior_type = case_when(
+trip_type == "sub_candidate" & trip_id %in% sub_one_ids ~ "sub_one",
+trip_type == "sub_candidate" & !trip_id %in% sub_one_ids ~ "sub_multi",
+TRUE ~ trip_type 
+)
+)
+
+table(behavior_df$behavior_type)
+```
+
+```{r}
+trips_with_behavior <- valid_trips %>%
+left_join(behavior_df %>% select(trip_id, behavior_type),
+by = "trip_id") %>%
+mutate(
+
+start_time = suppressWarnings(ymd_hms(StartTime)),
+date = as_date(start_time),
+hour = hour(start_time),
+weekday = wday(start_time, label = TRUE, week_start = 1),
+day_type = if_else(weekday %in% c("Sat", "Sun"), "Weekend", "Weekday")
+) %>%
+filter(!is.na(start_time))
+```
+
+```{r}
+trips_core <- trips_with_behavior %>%
+select(trip_id, behavior_type, start_time, date, hour, weekday, day_type,
+TripDuration) 
+```
+
+```{r}
+behavior_counts <- trips_core %>%
+count(behavior_type) %>%
+mutate(
+pct = n / sum(n),
+behavior_type = factor(
+behavior_type,
+levels = c("none", "first_mile", "last_mile", "sub_multi", "sub_one")
+)
+)
+
+behavior_counts
+```
+
+```{r}
+ggplot(behavior_counts,
+aes(x = behavior_type, y = pct, fill = behavior_type)) +
+geom_col() +
+scale_y_continuous(labels = percent_format(accuracy = 1)) +
+scale_fill_viridis_d(option = "C", end = 0.9) +
+labs(
+title = "Composition of Scooter Trip Types",
+x = "Behavior type",
+y = "Share of all scooter trips"
+) +
+theme_minimal() +
+theme(legend.position = "none")
+```
+
+```{r}
+hourly_normalized <- trips_core %>%
+group_by(day_type, behavior_type, date, hour) %>%
+summarise(n = n(), .groups = "drop") %>%
+group_by(day_type, behavior_type, hour) %>%
+summarise(avg_trips = mean(n), .groups = "drop")
+```
+
+```{r}
+ggplot(hourly_normalized,
+aes(x = hour, y = avg_trips,
+color = behavior_type, group = behavior_type)) +
+geom_line(size = 1.1) +
+facet_wrap(~ day_type, ncol = 1) +
+scale_x_continuous(breaks = 0:23) +
+scale_color_viridis_d(option = "D", end = 0.9) +
+labs(
+title = "Average Hourly Scooter Trips by Behavior Type",
+x = "Hour of day",
+y = "Avg trips per hour"
+) +
+theme_minimal()
+```
+
+```{r}
+behavior_simplified <- c("sub_one", "first_mile", "last_mile", "none")
+
+hourly_simplified <- hourly_normalized %>%
+filter(behavior_type %in% behavior_simplified)
+
+ggplot(hourly_simplified,
+aes(x = hour, y = avg_trips,
+color = behavior_type, group = behavior_type)) +
+geom_line(size = 1.2) +
+facet_wrap(~ day_type, ncol = 1) +
+scale_x_continuous(breaks = 0:23) +
+scale_color_manual(values = c(
+"sub_one" = "#1f78b4",
+"first_mile" = "#33a02c",
+"last_mile" = "#b2df8a",
+"none" = "#fb9a99"
+)) +
+labs(
+title = "Average Hourly Trips (Selected Behavior Types)",
+x = "Hour of day",
+y = "Avg trips per hour",
+color = "Behavior type"
+) +
+theme_minimal()
+```
+
+```{r}
+start_points_beh <- start_points %>%
+left_join(behavior_df %>% select(trip_id, behavior_type),
+by = "trip_id")
+
+nearest_idx <- st_nearest_feature(start_points_beh, stops_sf)
+
+dist_to_stop <- st_distance(start_points_beh,
+stops_sf[nearest_idx, ],
+by_element = TRUE)
+
+start_points_beh <- start_points_beh %>%
+mutate(
+dist_to_nearest_stop = as.numeric(dist_to_stop) # in meters
+)
+```
+```{r}
+ggplot(start_points_beh,
+aes(x = behavior_type, y = dist_to_nearest_stop)) +
+geom_boxplot(outlier.alpha = 0.2) +
+scale_y_continuous(
+trans = "log10",
+breaks = c(10, 30, 100, 300, 1000),
+labels = c("10m", "30m", "100m", "300m", "1km")
+) +
+labs(
+title = "Distance from Scooter Start to Nearest Transit Stop",
+x = "Behavior type",
+y = "Distance (log scale)"
+) +
+theme_minimal()
+```
+
+```{r}
+boardings_sf <- readRDS("../Dashboard/data/stop_boardings_sf.rds")
+stop_times <- readRDS("../Dashboard/data/stop_times.rds")
+trips_gtfs <- readRDS("../Dashboard/data/trips_gtfs.rds")
+routes_gtfs <- readRDS("../Dashboard/data/routes_gtfs.rds")
+```
+
+```{r}
+stop_routes <- stop_times %>%
+select(trip_id, stop_id) %>%
+distinct() %>%
+left_join(
+trips_gtfs %>% select(trip_id, route_id),
+by = "trip_id"
+) %>%
+distinct(stop_id, route_id)
+```
+
+leaky
+
+```{r}
+if (exists("boardings_sf")) {
+
+stop_boardings <- boardings_sf %>%
+st_drop_geometry() %>%
+select(stop_id, boardings)
+
+route_boardings <- stop_routes %>%
+left_join(stop_boardings, by = "stop_id") %>%
+group_by(route_id) %>%
+summarise(route_boardings = sum(boardings, na.rm = TRUE),
+.groups = "drop")
+
+
+route_sub_trips <- same_route_trips_expanded %>%
+distinct(trip_id, route_id) %>%
+count(route_id, name = "route_sub_trips")
+
+route_stats <- route_boardings %>%
+left_join(route_sub_trips, by = "route_id") %>%
+left_join(routes_gtfs %>% select(route_id, route_short_name, route_long_name),
+by = "route_id") %>%
+mutate(
+route_sub_trips = if_else(is.na(route_sub_trips), 0L, route_sub_trips),
+leakiness = if_else(route_boardings > 0,
+route_sub_trips / route_boardings,
+NA_real_)
+)
+
+head(route_stats)
+}
+```
+```{r}
+if (exists("route_stats")) {
+top_leaky <- route_stats %>%
+filter(!is.na(leakiness)) %>%
+arrange(desc(leakiness)) %>%
+slice_head(n = 10) %>%
+mutate(route_short_name = factor(route_short_name,
+levels = route_short_name[order(leakiness)]))
+
+ggplot(top_leaky,
+aes(x = route_short_name, y = leakiness)) +
+geom_col(fill = "#1f78b4") +
+coord_flip() +
+labs(
+title = "Top 10 'Leaky' Routes",
+subtitle = "Scooter substitutions per bus boarding",
+x = "Route short name",
+y = "Leakiness (subs / boardings)"
+) +
+theme_minimal()
+}
+```
+
+gap intensity
+
+```{r}
+gap_trips <- trips_core %>%
+filter(behavior_type == "none")
+
+all_trips <- trips_core
+```
+```{r}
+bbox_union <- st_union(road_centerlines)
+grid <- st_make_grid(bbox_union, cellsize = 500) %>% # 500m grid
+st_sf(grid_id = 1(.))
+
+start_with_behavior <- start_points %>%
+left_join(behavior_df %>% select(trip_id, behavior_type),
+by = "trip_id")
+
+grid_counts <- st_join(grid, start_with_behavior) %>%
+st_drop_geometry() %>%
+group_by(grid_id) %>%
+summarise(
+all_trips = n(),
+gap_trips = sum(behavior_type == "none", na.rm = TRUE),
+.groups = "drop"
+) %>%
+mutate(
+gap_share = if_else(all_trips > 0, gap_trips / all_trips, NA_real_)
+) %>%
+right_join(grid, by = "grid_id") %>%
+st_as_sf()
+```
+
+```{r}
+tmap_mode("plot")
+
+tm_shape(grid_counts) +
+tm_polygons(
+col = "gap_share",
+palette = "magma",
+style = "cont",
+title = "Gap share",
+textNA = "No trips"
+) +
+tm_layout(
+title = "Where Scooters Operate Far from Transit",
+legend.outside = TRUE
+)
+
+```
+
+

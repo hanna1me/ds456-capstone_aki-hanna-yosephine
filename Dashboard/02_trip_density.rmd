@@ -14,9 +14,9 @@ library(dplyr)
 library(tmap)
 crs_proj <- 26915
 
-valid_trips <- readRDS("../Analysis/data/valid_trips.rds")
-road_centerlines<- readRDS("../Analysis/data/road_centerlines.rds")
-start_points <- readRDS("../Analysis/data/start_points.rds")
+valid_trips <- readRDS("../Dashboard/data/valid_trips.rds")
+road_centerlines<- readRDS("../Dashboard/data/road_centerlines.rds")
+start_points <- readRDS("../Dashboard/data/start_points.rds")
 ```
 
 ```{r}

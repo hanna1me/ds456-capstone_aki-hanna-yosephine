@@ -13,19 +13,20 @@ library(shiny)
 library(leaflet)
 library(dplyr)
 library(sf)
-library(tmap)
 library(DT)
 library(viridis)
+library(ggplot2)
+library(lubridate)
 ```
 ```{r}
-valid_trips <- readRDS("../Analysis/data/valid_trips.rds")
-start_points <- readRDS("../Analysis/data/start_points.rds")
-end_points <- readRDS("../Analysis/data/end_points.rds")
-stops_sf <- readRDS("../Analysis/data/stops_sf.rds")
+valid_trips <- readRDS("../Dashboard/data/valid_trips.rds")
+start_points <- readRDS("../Dashboard/data/start_points.rds")
+end_points <- readRDS("../Dashboard/data/end_points.rds")
+stops_sf <- readRDS("../Dashboard/data/stops_sf.rds")
 
-road_centerlines <- readRDS("../Analysis/data/road_centerlines.rds")
-trip_proximity <- readRDS("../Analysis/data/trip_proximity.rds")
-same_route_trips_expanded <- readRDS("../Analysis/data/same_route_trips_expanded.rds")
+road_centerlines <- readRDS("../Dashboard/data/road_centerlines.rds")
+trip_proximity <- readRDS("../Dashboard/data/trip_proximity.rds")
+same_route_trips_expanded <- readRDS("../Dashboard/data/same_route_trips_expanded.rds")
 ```
 
 ```{r}
@@ -34,24 +35,20 @@ end_points   <- st_as_sf(end_points)
 stops_sf     <- st_as_sf(stops_sf)
 road_centerlines <- st_as_sf(road_centerlines)
 ```
+
 ```{r}
-
 fix_point_geometry <- function(df, point_col = "geometry") {
-
-  geom_cols <- names(df)[sapply(df, inherits, "sfc")]
-
-  cols_to_drop <- setdiff(geom_cols, point_col)
-
-  if (length(cols_to_drop) > 0) {
-    df <- df[, !(names(df) %in% cols_to_drop)]
-  }
-
-  st_geometry(df) <- point_col
-  df
+geom_cols <- names(df)[sapply(df, inherits, "sfc")]
+cols_to_drop <- setdiff(geom_cols, point_col)
+if (length(cols_to_drop) > 0) {
+df <- df[, !(names(df) %in% cols_to_drop)]
+}
+st_geometry(df) <- point_col
+df
 }
 
 start_points <- fix_point_geometry(start_points, "geometry")
-end_points   <- fix_point_geometry(end_points,   "geometry")
+end_points <- fix_point_geometry(end_points, "geometry")
 ```
 
 ```{r}
@@ -66,7 +63,7 @@ grid <- st_make_grid(st_union(road_centerlines), cellsize = 200) %>%
 st_sf() %>%
 mutate(grid_id = row_number())
 
-grid_density <- st_join(grid, start_points) %>% 
+grid_density <- st_join(grid, start_points) %>%
 st_drop_geometry() %>%
 count(grid_id, name = "n") %>%
 right_join(grid, by = "grid_id") %>%
@@ -81,123 +78,277 @@ mutate(n_trimmed = pmin(n, max_cutoff))
 
 grid_density_nonzero_ll <- st_transform(grid_density_nonzero, 4326)
 ```
+
 ```{r}
-ui <- navbarPage(
+overlap_ids <- unique(same_route_trips_expanded$trip_id)
 
-"Scooter & Transit Dashboard Prototype",
+overlap_trips <- valid_trips %>%
+filter(trip_id %in% overlap_ids)
 
-tabPanel("Trip Density",
-leafletOutput("densityMap", height = "650px")),
+gap_trips <- valid_trips %>%
+filter(!trip_id %in% overlap_ids)
 
-tabPanel("Transit Proximity",
-sidebarLayout(
-sidebarPanel(
-checkboxGroupInput(
-"trip_type_filter",
-"Select Trip Types:",
-choices = c(
-"sub_candidate",
-"first_mile",
-"last_mile",
-"none"),
-selected = c("sub_candidate", "first_mile", "last_mile", "none")
-)),
-mainPanel(
-leafletOutput("proximityMap", height = "650px")
-))),
+overlap_trips <- overlap_trips %>%
+mutate(
+start_time = ymd_hms(StartTime),
+date = as.Date(start_time),
+hour = hour(start_time),
+weekday = wday(start_time, label = TRUE),
+day_type = if_else(weekday %in% c("Sat", "Sun"), "Weekend", "Weekday")
+)
 
-tabPanel("Same-Route Substitution",
-sidebarLayout(
-sidebarPanel(
-selectInput(
-"route_select",
-"Select Route:",
-choices = sort(unique(same_route_trips_expanded$route_short_name))
-)),
-mainPanel(
-leafletOutput("subMap", height = "650px"),
-br(),
-DTOutput("subTable")
-))))
+daily_counts <- overlap_trips %>%
+count(date, day_type)
+
+avg_daily_overlap <- daily_counts %>%
+group_by(day_type) %>%
+summarise(
+avg_trips_per_day = mean(n),
+days_count = n(),
+.groups = "drop"
+)
+
+hourly_normalized <- overlap_trips %>%
+group_by(day_type, date, hour) %>%
+summarise(n = n(), .groups = "drop") %>%
+group_by(day_type, hour) %>%
+summarise(avg_trips = mean(n), .groups = "drop")
+
+overlap_gap_counts <- tibble(
+type = c("Overlapped (same-route)", "Route gaps"),
+n = c(nrow(overlap_trips), nrow(gap_trips))
+)
+
+
+```
+
+```{r}
+ui <- fluidPage(
+titlePanel("Scooter & Transit Dashboard"),
+
+tabsetPanel(
+
+#---------------- TAB 1: OVERVIEW & FINDINGS ----------------#
+tabPanel(
+  "Overview & Findings",
+  fluidRow(
+    column(
+      6,
+      h3("Where and when do overlaps occur?"),
+      p("This dashboard explores how scooter trips in Minneapolis relate to public transit.",
+        "We focus on two behaviors: trips that could be replaced by a single bus route,",
+        "and trips that occur in gaps where no such transit substitute exists."),
+      br(),
+      h4("Scooter Trip Density (All Trips)"),
+      leafletOutput("overviewDensityMap", height = "400px")
+    ),
+    column(
+      6,
+      h4("Overlap vs Route Gaps (Counts)"),
+      plotOutput("overviewOverlapGapBar", height = "250px"),
+      br(),
+      h4("Average Overlapping Trips per Day"),
+      plotOutput("overviewAvgDaily", height = "250px")
+    )
+  ),
+  hr(),
+  fluidRow(
+    column(
+      12,
+      h4("Hourly Overlap Pattern: Weekday vs Weekend"),
+      plotOutput("overviewHourlyPattern", height = "300px")
+    )
+  )
+),
+
+#---------------- TAB 2: OVERLAPPED ROUTES ----------------#
+tabPanel(
+  "Overlapped Routes",
+  sidebarLayout(
+    sidebarPanel(
+      p("These are scooter trips where the start and end stops are both served by at least one common bus route,",
+        "meaning a single bus could, in principle, replace the scooter trip."),
+      selectInput(
+        "route_select",
+        "Select Route (shared route ID):",
+        choices = sort(unique(same_route_trips_expanded$route_short_name))
+      )
+    ),
+    mainPanel(
+      leafletOutput("subMap", height = "550px"),
+      br(),
+      h4("Scooter Trips with Same-Route Substitution"),
+      DTOutput("subTable")
+    )
+  )
+),
+
+#---------------- TAB 3: ROUTE GAPS ----------------#
+tabPanel(
+  "Route Gaps",
+  sidebarLayout(
+    sidebarPanel(
+      p("These are scooter trips that do not have a matching bus route serving both start and end stops.",
+        "They may indicate areas or times where transit coverage is thin or inconvenient."),
+      checkboxGroupInput(
+        "gap_trip_type_filter",
+        "Trip types (relative to stops):",
+        choices = c(
+          "near neither stop" = "none",
+          "first mile"        = "first_mile",
+          "last mile"         = "last_mile",
+          "near both (no same route)" = "sub_candidate"
+        ),
+        selected = c("none", "first_mile", "last_mile", "sub_candidate")
+      )
+    ),
+    mainPanel(
+      leafletOutput("gapMap", height = "550px")
+    )
+  )
+)
+
+)
+)
 ```
 
 ```{r}
 server <- function(input, output, session) {
 
-#---------------- TAB 1: DENSITY ----------------#
-output$densityMap <- renderLeaflet({
+#---------------- TAB 1: OVERVIEW & FINDINGS ----------------#
+
+output$overviewDensityMap <- renderLeaflet({
 pal <- colorNumeric("YlOrRd", domain = grid_density_nonzero_ll$n_trimmed)
 
 leaflet() %>%
-addProviderTiles(providers$OpenStreetMap) %>%
-addPolygons(
-data = grid_density_nonzero_ll,
-fillColor = ~pal(n_trimmed),
-fillOpacity = 0.7,
-weight = 0,
-stroke = FALSE
-)
+  addProviderTiles(providers$OpenStreetMap) %>%
+  addPolygons(
+    data = grid_density_nonzero_ll,
+    fillColor = ~pal(n_trimmed),
+    fillOpacity = 0.7,
+    weight = 0,
+    stroke = FALSE
+  )
+
 })
 
-#---------------- TAB 2: PROXIMITY ----------------#
-output$proximityMap <- renderLeaflet({
-
-df <- start_points_ll %>%
-left_join(trip_proximity %>% select(trip_id, trip_type), by = "trip_id") %>%
-filter(trip_type %in% input$trip_type_filter)
-
-pal <- colorFactor(
-palette = c("darkblue", "darkgreen", "orange", "gray"),
-levels = c("sub_candidate", "first_mile", "last_mile", "none")
-)
-
-leaflet() %>%
-addProviderTiles(providers$CartoDB.Positron) %>%
-addCircleMarkers(
-data = df,
-radius = 4,
-stroke = FALSE,
-fillOpacity = 0.8,
-color = ~pal(trip_type),
-popup = ~paste("Trip ID:", trip_id, "Type:", trip_type)
-)
+output$overviewOverlapGapBar <- renderPlot({
+ggplot(overlap_gap_counts, aes(x = type, y = n, fill = type)) +
+geom_col() +
+scale_fill_manual(values = c("Overlapped (same-route)" = "#21908d",
+"Route gaps" = "#440154")) +
+labs(
+x = "",
+y = "Number of trips"
+) +
+theme_minimal() +
+theme(legend.position = "none")
 })
 
-#---------------- TAB 3: SAME-ROUTE SUB ----------------#
+
+output$overviewAvgDaily <- renderPlot({
+ggplot(avg_daily_overlap,
+aes(x = day_type, y = avg_trips_per_day, fill = day_type)) +
+geom_col() +
+scale_fill_manual(values = c("Weekday" = "#21908d", "Weekend" = "#3b528b")) +
+labs(
+x = "",
+y = "Average overlapping trips per day"
+) +
+theme_minimal() +
+theme(legend.position = "none")
+})
+
+
+output$overviewHourlyPattern <- renderPlot({
+ggplot(hourly_normalized,
+aes(x = hour, y = avg_trips, color = day_type)) +
+geom_line(size = 1.1) +
+scale_x_continuous(breaks = 0:23) +
+labs(
+x = "Hour of day",
+y = "Average overlapping trips per hour"
+) +
+theme_minimal()
+})
+
+#---------------- TAB 2: OVERLAPPED ROUTES ----------------#
+
 output$subMap <- renderLeaflet({
 
 selected <- same_route_trips_expanded %>%
-filter(route_short_name == input$route_select)
+  filter(route_short_name == input$route_select)
 
 starts_filtered <- start_points_ll %>%
-filter(trip_id %in% selected$trip_id)
+  filter(trip_id %in% selected$trip_id)
 
 ends_filtered <- end_points_ll %>%
-filter(trip_id %in% selected$trip_id)
+  filter(trip_id %in% selected$trip_id)
 
 leaflet() %>%
-addProviderTiles(providers$OpenStreetMap) %>%
-addCircleMarkers(
-data = starts_filtered,
-color = "darkblue",
-radius = 3,
-opacity = 0.8,
-fillOpacity = 0.8,
-popup = ~paste("Trip ID:", trip_id)
-) %>%
-addCircleMarkers(
-data = ends_filtered,
-color = "violet",
-radius = 3,
-opacity = 0.8,
-fillOpacity = 0.8,
-popup = ~paste("Trip ID:", trip_id)
-)
+  addProviderTiles(providers$OpenStreetMap) %>%
+  addCircleMarkers(
+    data = starts_filtered,
+    color = "darkblue",
+    radius = 3,
+    opacity = 0.8,
+    fillOpacity = 0.8,
+    popup = ~paste("Trip ID:", trip_id, "<br>Start")
+  ) %>%
+  addCircleMarkers(
+    data = ends_filtered,
+    color = "violet",
+    radius = 3,
+    opacity = 0.8,
+    fillOpacity = 0.8,
+    popup = ~paste("Trip ID:", trip_id, "<br>End")
+  )
+
 })
 
 output$subTable <- renderDT({
 same_route_trips_expanded %>%
 filter(route_short_name == input$route_select)
+})
+
+#---------------- TAB 3: ROUTE GAPS ----------------#
+
+output$gapMap <- renderLeaflet({
+
+# attach trip_type to trips
+trip_gap_ids <- gap_trips$trip_id
+
+gaps_with_type <- trip_proximity %>%
+  filter(trip_id %in% trip_gap_ids)
+
+# filter by selected trip_types
+gaps_filtered_ids <- gaps_with_type %>%
+  filter(trip_type %in% input$gap_trip_type_filter) %>%
+  pull(trip_id)
+
+gap_starts <- start_points_ll %>%
+  filter(trip_id %in% gaps_filtered_ids)
+
+pal <- colorFactor(
+  palette = c("gray40", "darkgreen", "orange", "darkblue"),
+  levels = c("none", "first_mile", "last_mile", "sub_candidate")
+)
+
+# join trip_type for coloring
+gap_starts_join <- gap_starts %>%
+  left_join(trip_proximity %>% select(trip_id, trip_type), by = "trip_id")
+
+leaflet() %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  addCircleMarkers(
+    data = gap_starts_join,
+    radius = 4,
+    stroke = FALSE,
+    fillOpacity = 0.8,
+    color = ~pal(trip_type),
+    popup = ~paste("Trip ID:", trip_id, "<br>Type:", trip_type)
+  )
+
 })
 
 }
