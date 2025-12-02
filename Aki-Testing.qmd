@@ -1,0 +1,132 @@
+---
+title: "Minne Map thingys"
+format: html
+editor: visual
+---
+
+```{r}
+library(ggplot2)
+library(sf)
+library(dplyr)
+library(tigris)
+library(patchwork)
+library(lubridate)
+library(hms)
+
+bus_routes <- sf::st_read("shp_trans_transit_routes/TransitRoutes.shp")
+scooter_index <- st_read("Motorized_Foot_Scooter_Trips_2021_-4404685251255547248.geojson")
+centerline <- sf::st_read("MPLS_Centerline//MPLS_Centerline.shp")
+```
+```{r}
+
+scooter_index <- scooter_index %>%
+  filter(StartCenterlineType != 'trail' | EndCenterlineType != 'trail') %>%
+  mutate(
+    StartTime_clean = sub("^\\w+, ", "", StartTime),
+    StartTime_clean = sub(" GMT$", "", StartTime_clean),
+    EndTime_clean = sub("^\\w+, ", "", EndTime),
+    EndTime_clean = sub(" GMT$", "", EndTime_clean),
+    Startcleaning = as.POSIXct(StartTime_clean, format = "%d %b %Y %H:%M:%S", tz = "UTC"),
+    Endcleaning = as.POSIXct(EndTime_clean, format = "%d %b %Y %H:%M:%S", tz = "UTC"),
+    Start_date = as.Date(Startcleaning),
+    Start_clock = as_hms(format(Startcleaning, "%H:%M:%S")),
+    End_date = as.Date(Endcleaning),
+    End_clock = as_hms(format(Endcleaning, "%H:%M:%S"))) %>%
+  select(-StartTime_clean, -Startcleaning, -EndTime_clean, -Endcleaning)
+  
+
+
+```
+
+```{r}
+
+ggplot(scooter_index, aes(x = Start_clock)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+heatmap_data <- scooter_cleaned_Start %>%
+  group_by(STREETALL, hour(Start_clock)) %>%
+  summarise(trips = n(), .groups = "drop")
+
+ggplot(heatmap_data, aes(x = Start_clock, y = STREETALL, fill = trips)) +
+  geom_tile(color = "white") +
+  scale_fill_viridis_c(option = "plasma") +
+  labs(
+    title = "Scooter Trips by Hour and Street",
+    x = "Hour of Day",
+    y = "Street",
+    fill = "Number of Trips"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggplot(data = scooter_index) +
+  geom_point(aes(x = TripDuration, y = TripDistance))
+
+ggplot(scooter_cleaned_Start) +
+  geom_bar(aes( x= date))
+
+
+
+
+options(tigris_use_cache = TRUE)
+mpls <- places(state = "MN", year = 2020, class = "sf") |>
+  filter(NAME == "Minneapolis") |>
+  st_transform(4326)
+
+scooter_cleaned_Start <- centerline %>%
+  left_join(
+    st_set_geometry(scooter_index, NULL),  
+    by = c("GBSID" = "StartCenterlineID")
+  ) %>%
+  select(OBJECTID, STREETALL, GBSID, TripID, TripDuration, TripDistance, StartTime, EndTime, Start_clock, End_clock, date)
+
+scooter_cleaned_End <- centerline %>%
+  left_join(
+    st_set_geometry(scooter_index, NULL),  
+    by = c("GBSID" = "EndCenterlineID")
+  )%>%
+  select(OBJECTID, STREETALL, GBSID, TripID, TripDuration, TripDistance, StartTime, EndTime)
+
+
+
+startLines <- ggplot() +
+  geom_sf(data = mpls, fill = "gray90", color = "white", size = 0.1) +
+  geom_sf(data = scooter_cleaned_Start, color = "blue", alpha = 0.01) +
+  theme_minimal() +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+
+endLines <- ggplot() +
+  geom_sf(data = mpls, fill = "gray90", color = "white", size = 0.1) +
+  geom_sf(data = scooter_cleaned_End, color = "red", alpha = 0.01) +
+  theme_minimal() +
+  theme(
+    axis.title = element_blank(),
+    axis.text = element_blank(),
+    axis.ticks = element_blank(),
+    panel.grid = element_blank(),
+    panel.border = element_blank()
+  )
+
+# Combine side by side
+(startLines | endLines) + 
+  plot_annotation(
+    title = "The Starts and Ends of Commuter Bike Travel",
+    theme = theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"))
+  )
+
+
+
+
+```
+
+```{r}
+ggplot(data = scooter_index) %>%
+  geom_point(aes(x = Trip))
+```
