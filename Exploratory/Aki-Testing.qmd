@@ -17,6 +17,7 @@ bus_routes <- sf::st_read("shp_trans_transit_routes/TransitRoutes.shp")
 scooter_index <- st_read("Motorized_Foot_Scooter_Trips_2021_-4404685251255547248.geojson")
 centerline <- sf::st_read("MPLS_Centerline//MPLS_Centerline.shp")
 ```
+
 ```{r}
 
 scooter_index <- scooter_index %>%
