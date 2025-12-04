@@ -12,12 +12,89 @@ library(tigris)
 library(patchwork)
 library(lubridate)
 library(hms)
+library(readr)
 
-bus_routes <- sf::st_read("shp_trans_transit_routes/TransitRoutes.shp")
-scooter_index <- st_read("Motorized_Foot_Scooter_Trips_2021_-4404685251255547248.geojson")
-centerline <- sf::st_read("MPLS_Centerline//MPLS_Centerline.shp")
+# bus_routes <- sf::st_read("shp_trans_transit_routes/TransitRoutes.shp")
+# scooter_index <- st_read("Motorized_Foot_Scooter_Trips_2021_-4404685251255547248.geojson")
+# centerline <- sf::st_read("MPLS_Centerline//MPLS_Centerline.shp")
+
+scooter_trips_2025 <- read_csv("Data\\scooter_trips_2025.csv")
+centerline <- sf::st_read("\\Data\\MPLS_Centerline\\MPLS_Centerline.shp")
+
+
+```
+```{r}
+
+
+valid_trips %>%
+  mutate(DurationCat = cut(
+    TripDuration,
+    breaks = seq(0, max(TripDuration, na.rm = TRUE), by = 30),  
+    include.lowest = TRUE
+  )) %>%
+  count(DurationCat) %>%
+  arrange(desc(n))
+
+
+
+# choose the quantile where thinning starts, e.g. 0.85
+cutoff <- quantile(valid_trips$TripDuration, probs = 0.85, na.rm = TRUE)
+
+ggplot(valid_trips, aes(TripDuration, TripDistance)) +
+  geom_point() +
+  geom_vline(xintercept = cutoff, color = "red", linetype = "dashed") +
+  annotate("text",
+           x = cutoff,
+           y = max(valid_trips$TripDistance, na.rm = TRUE),
+           label = paste("Cutoff =", round(cutoff, 0)),
+           hjust = -0.1,
+           color = "red")
+
+
+```
+```{r}
+overlap_gap_counts$Percent <- overlap_gap_counts$n / sum(overlap_gap_counts$n) * 100
+
+ggplot(overlap_gap_counts, aes(x = "", y = n, fill = type)) +
+  geom_col(width = 1) +
+  geom_text(aes(label = paste0(round(Percent, 1), "%")),
+            position = position_stack(vjust = 0.5), color = "white") +
+  coord_polar(theta = "y") +
+  labs(title = "Trip Categories") +
+  theme_void() +
+  theme(legend.title = element_blank())
+
 ```
 
+```{r}
+valid_trips %>%
+  filter(TripDuration <= 600) %>%
+  mutate(DurationCat = cut(
+    TripDuration,
+    breaks = seq(0, 600, by = 60),
+    include.lowest = TRUE
+  )) %>%
+  count(DurationCat) %>%
+  ggplot(aes(x = DurationCat, y = n)) +
+  geom_col()
+
+
+```
+```{r}
+valid_trips %>%
+  filter(TripDistance >= 0, TripDistance <= 3000) %>% 
+  mutate(DistanceCat = cut(
+    TripDistance,
+    breaks = seq(0, 30000, by = 100),                  
+    include.lowest = TRUE
+  )) %>%
+  count(DistanceCat) %>%                              
+  ggplot(aes(x = DistanceCat, y = n)) +
+  geom_col() +
+  labs(x = "Trip distance (binned)",
+       y = "Count of trips") +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+```
 ```{r}
 
 scooter_index <- scooter_index %>%
@@ -38,7 +115,9 @@ scooter_index <- scooter_index %>%
 
 
 ```
+```{r}
 
+```
 ```{r}
 
 ggplot(scooter_index, aes(x = Start_clock)) +
