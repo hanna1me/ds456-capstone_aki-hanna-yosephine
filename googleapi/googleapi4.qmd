@@ -6,7 +6,7 @@ editor: visual
 ---
 
 ```{r}
-Sys.setenv(GOOGLE_MAPS_KEY = "AIzaSyB1ZWEJDZncdxepbfGW47c8FnN4NyMpGYs")
+Sys.setenv(GOOGLE_MAPS_KEY = "()")
 ```
 
 ```{r}
@@ -117,7 +117,7 @@ test_debug <- debug_google_call(
   dest_lon   = -93.2260,
   mode       = "transit",
   departure_time = "2025-06-04 08:00:00",
-  api_key    = "AIzaSyB1ZWEJDZncdxepbfGW47c8FnN4NyMpGYs"
+  api_key    = "()"
 )
 
 test_debug
