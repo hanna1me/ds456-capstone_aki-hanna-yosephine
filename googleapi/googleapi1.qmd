@@ -1,0 +1,148 @@
+---
+title: "googleapi1"
+format: html
+editor: visual
+author: Hanna Chang
+---
+
+```{r}
+library(httr)
+library(jsonlite)
+library(dplyr)
+library(glue)
+library(hms)
+library(tidyr)
+library(sf)
+```
+
+
+```{r}
+trip_stops <- trip_proximity %>%
+  sf::st_drop_geometry() %>%
+  filter(trip_type == "sub_candidate") %>%
+  select(trip_id, start_stop_id, end_stop_id) %>%
+  distinct()
+```
+
+```{r}
+head(trip_stops)
+```
+
+
+```{r}
+valid_trips <- valid_trips %>%
+  mutate(duration_micro_min = TripDuration / 60)
+```
+
+```{r}
+trip_route_candidates <- trip_stops %>%
+  left_join(stop_routes, by = c("start_stop_id" = "stop_id"), relationship = "many-to-many") %>%
+  rename(route_id_start = route_id) %>%
+  left_join(stop_routes, by = c("end_stop_id" = "stop_id"),
+            suffix = c("_start", "_end"), relationship = "many-to-many") %>%
+  rename(route_id_end = route_id) %>%
+  filter(route_id_start == route_id_end) %>%
+  distinct(trip_id, start_stop_id, end_stop_id,
+           route_id = route_id_start) %>%
+  left_join(routes_gtfs, by = "route_id")
+```
+
+```{r}
+trip_transit_times <- trip_route_candidates %>%
+  rowwise() %>%
+  mutate(
+    seg = list(
+      compute_segment_travel_time(
+        route_short_name = route_short_name,
+        origin_stop_id   = start_stop_id,
+        dest_stop_id     = end_stop_id
+      )
+    )
+  ) %>%
+  ungroup() %>%
+  unnest(seg) %>%
+  group_by(trip_id, route_id, route_short_name) %>%
+  summarise(
+    transit_travel_min = median(travel_min, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+```{r}
+trip_best_transit <- trip_transit_times %>%
+  group_by(trip_id) %>%
+  slice_min(transit_travel_min, with_ties = FALSE) %>%
+  ungroup()
+
+micro_vs_transit <- valid_trips %>%
+  left_join(trip_best_transit, by = "trip_id") %>%
+  mutate(
+    diff_transit_minus_micro = transit_travel_min - duration_micro_min
+  )
+```
+# redo
+
+```{r}
+rm(list = c("compute_segment_travel_time"))
+
+compute_segment_travel_time <- function(route_short_name,
+                                        origin_stop_id,
+                                        dest_stop_id,
+                                        routes = routes_gtfs,
+                                        trips  = trips_gtfs,
+                                        stimes = stop_times) {
+
+  trips_on_route <- trips %>%
+    inner_join(routes, by = "route_id") %>%
+    filter(route_short_name == !!route_short_name)
+
+  st <- stimes %>%
+    semi_join(trips_on_route, by = "trip_id") %>%
+    filter(stop_id %in% c(origin_stop_id, dest_stop_id)) %>%
+    select(trip_id, stop_id, arrival_time, departure_time)
+
+  orig <- st %>%
+    filter(stop_id == origin_stop_id) %>%
+    transmute(trip_id,
+              origin_dep_time = departure_time)
+
+  dest <- st %>%
+    filter(stop_id == dest_stop_id) %>%
+    transmute(trip_id,
+              dest_arr_time = arrival_time)
+
+  pairwise <- inner_join(orig, dest, by = "trip_id") %>%
+    mutate(
+      travel_min = as.numeric(dest_arr_time - origin_dep_time, units = "mins")
+    ) %>%
+    filter(travel_min > 0)
+
+  pairwise
+}
+```
+
+
+```{r}
+trip_transit_times <- trip_route_candidates %>%
+  rowwise() %>%
+  mutate(
+    seg = list(
+      compute_segment_travel_time(
+        route_short_name = route_short_name,
+        origin_stop_id   = start_stop_id,
+        dest_stop_id     = end_stop_id
+      )
+    )
+  ) %>%
+  ungroup() %>%
+  unnest(seg) %>%
+  group_by(trip_id, route_id, route_short_name) %>%
+  summarise(
+    transit_travel_min = median(travel_min, na.rm = TRUE),
+    .groups = "drop"
+  )
+```
+
+
+
+

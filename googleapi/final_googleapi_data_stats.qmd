@@ -1,0 +1,148 @@
+---
+title: "finalmergedapi"
+author: "Hanna Chang"
+format: html
+editor: visual
+---
+
+## Final merged data
+```{r}
+final_results <- sample_100 %>%
+  select(trip_id, duration_micro_min, StartTime,
+         start_stop_id_snap, start_stop_lat_snap, start_stop_lon_snap,
+         end_stop_id_snap,   end_stop_lat_snap,   end_stop_lon_snap) %>%
+  left_join(bike_summary,    by = "trip_id") %>%
+  left_join(transit_summary, by = "trip_id")
+```
+
+## Summary stats
+### Basic summary
+```{r}
+summary_stats <- final_results %>%
+  summarise(
+    avg_micromobility = mean(duration_micro_min, na.rm = TRUE),
+    avg_bike          = mean(bike_duration_min, na.rm = TRUE),
+    avg_transit       = mean(transit_duration_min, na.rm = TRUE),
+
+    median_micromobility = median(duration_micro_min, na.rm = TRUE),
+    median_bike          = median(bike_duration_min, na.rm = TRUE),
+    median_transit       = median(transit_duration_min, na.rm = TRUE)
+  )
+
+summary_stats
+```
+
+### Compute differences between modes
+```{r}
+diffs <- final_results %>%
+  mutate(
+    micro_vs_bike   = duration_micro_min - bike_duration_min,
+    micro_vs_transit = duration_micro_min - transit_duration_min,
+    bike_vs_transit  = bike_duration_min - transit_duration_min
+  )
+```
+
+### Proportion of trips where each mode is fastest
+```{r}
+fastest_counts <- final_results %>%
+  mutate(
+    fastest = pmin(duration_micro_min, bike_duration_min, transit_duration_min, na.rm = TRUE),
+    winner = case_when(
+      fastest == duration_micro_min   ~ "Micromobility",
+      fastest == bike_duration_min     ~ "Bike",
+      fastest == transit_duration_min  ~ "Transit",
+      TRUE ~ NA_character_
+    )
+  ) %>%
+  count(winner)
+
+fastest_counts
+```
+
+## Visualizations
+```{r}
+viz_data <- final_results %>%
+  select(trip_id, duration_micro_min, bike_duration_min, transit_duration_min) %>%
+  pivot_longer(-trip_id, names_to = "mode", values_to = "duration")
+
+ggplot(viz_data, aes(x = mode, y = duration, fill = mode)) +
+  geom_boxplot() +
+  labs(title = "Comparing Travel Times by Mode",
+       x = "", y = "Duration (minutes)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(final_results, aes(x = duration_micro_min, y = bike_duration_min)) +
+  geom_point(alpha = 0.6) +
+  geom_abline(color = "red") +
+  labs(title = "Micromobility vs Bike Travel Times",
+       x = "Micromobility (min)", y = "Bike (min)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(final_results, aes(x = duration_micro_min, y = transit_duration_min)) +
+  geom_point(alpha = 0.6, color = "blue") +
+  geom_abline(color = "red") +
+  labs(title = "Micromobility vs Transit Travel Times",
+       x = "Micromobility (min)", y = "Transit (min)") +
+  theme_minimal()
+```
+
+```{r}
+ggplot(viz_data, aes(x = duration, color = mode, fill = mode)) +
+  geom_density(alpha = 0.3) +
+  labs(title = "Distribution of Travel Times",
+       x = "Duration (minutes)", y = "Density") +
+  theme_minimal()
+```
+
+```{r}
+leaflet() %>%
+  addTiles() %>%
+  addCircleMarkers(
+    data = sample_100,
+    lng = ~start_stop_lon_snap,
+    lat = ~start_stop_lat_snap,
+    color = "blue", radius = 4,
+    popup = ~paste("Trip", trip_id, "<br>Start Stop:", start_stop_id_snap)
+  ) %>%
+  addCircleMarkers(
+    data = sample_100,
+    lng = ~end_stop_lon_snap,
+    lat = ~end_stop_lat_snap,
+    color = "red", radius = 4,
+    popup = ~paste("Trip", trip_id, "<br>End Stop:", end_stop_id_snap)
+  )
+```
+
+## Final comparison table
+```{r}
+final_table <- final_results %>%
+  select(trip_id,
+         micromobility_min = duration_micro_min,
+         bike_min = bike_duration_min,
+         transit_min = transit_duration_min)
+
+head(final_table)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

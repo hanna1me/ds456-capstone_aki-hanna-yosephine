@@ -1,0 +1,366 @@
+---
+title: "googleapi3"
+author: "Hanna Chang"
+format: html
+editor: visual
+---
+
+```{r}
+Sys.setenv(GOOGLE_MAPS_KEY = "()")
+```
+
+```{r}
+library(httr)
+library(jsonlite)
+library(dplyr)
+library(purrr)
+library(tidyr)
+```
+
+## Helper function
+```{r}
+# get_google_duration <- function(origin_lat, origin_lon,
+#                                 dest_lat, dest_lon,
+#                                 mode = c("bicycling", "transit"),
+#                                 departure_time = NULL,
+#                                 api_key = Sys.getenv("GOOGLE_MAPS_KEY")) {
+# 
+#   mode <- match.arg(mode)
+# 
+#   base_url <- "https://maps.googleapis.com/maps/api/directions/json"
+# 
+#   if (is.null(departure_time)) {
+#     departure_unix <- as.integer(Sys.time())
+#   } else {
+#     departure_unix <- as.integer(as.POSIXct(departure_time, tz = "UTC"))
+#   }
+# 
+#   q <- list(
+#     origin      = sprintf("%f,%f", origin_lat, origin_lon),
+#     destination = sprintf("%f,%f", dest_lat, dest_lon),
+#     mode        = mode,
+#     key         = api_key
+#   )
+#   if (mode == "transit") q$departure_time <- departure_unix
+# 
+#   out <- tryCatch({
+#     res  <- GET(base_url, query = q)
+#     cont <- fromJSON(content(res, "text", encoding = "UTF-8"))
+# 
+#     if (cont$status != "OK" || length(cont$routes) == 0) {
+#       return(tibble(duration_min = NA_real_,
+#                     route_summary = NA_character_))
+#     }
+# 
+#     leg <- cont$routes[[1]]$legs[[1]]
+#     duration_min <- leg$duration$value / 60
+# 
+#     route_summary <- NA_character_
+#     if (mode == "transit") {
+#       steps <- leg$steps
+#       if (!is.null(steps$transit_details)) {
+#         short_names <- steps$transit_details$line$short_name
+#         short_names <- short_names[!is.na(short_names)]
+#         if (length(short_names) > 0) {
+#           route_summary <- paste(unique(short_names), collapse = " + ")
+#         }
+#       }
+#     }
+# 
+#     tibble(duration_min = duration_min,
+#            route_summary = route_summary)
+# 
+#   }, error = function(e) {
+#     tibble(duration_min = NA_real_,
+#            route_summary = NA_character_)
+#   })
+# 
+#   out
+# }
+```
+
+## Helper function (temporary for debug)
+```{r}
+get_google_duration <- function(origin_lat, origin_lon,
+                                dest_lat, dest_lon,
+                                mode = c("bicycling", "transit"),
+                                departure_time = NULL,
+                                api_key = Sys.getenv("GOOGLE_MAPS_KEY")) {
+
+  mode <- match.arg(mode)
+
+  if (api_key == "") {
+    warning("GOOGLE_MAPS_KEY is empty inside R – directions calls will fail.")
+  }
+
+  base_url <- "https://maps.googleapis.com/maps/api/directions/json"
+
+  if (is.null(departure_time)) {
+    departure_unix <- as.integer(Sys.time())
+  } else {
+    departure_unix <- as.integer(as.POSIXct(departure_time, tz = "UTC"))
+  }
+
+  q <- list(
+    origin      = sprintf("%f,%f", origin_lat, origin_lon),
+    destination = sprintf("%f,%f", dest_lat, dest_lon),
+    mode        = mode,
+    key         = api_key
+  )
+  if (mode == "transit") q$departure_time <- departure_unix
+
+  out <- tryCatch({
+    res  <- GET(base_url, query = q)
+    cont <- fromJSON(content(res, "text", encoding = "UTF-8"))
+
+    status <- if (is.null(cont$status)) NA_character_ else cont$status
+    err    <- if (is.null(cont$error_message)) NA_character_ else cont$error_message
+
+    if (status != "OK" || length(cont$routes) == 0) {
+      return(tibble(
+        duration_min  = NA_real_,
+        route_summary = NA_character_,
+        status        = status,
+        error_message = err
+      ))
+    }
+
+    leg <- cont$routes[[1]]$legs[[1]]
+    duration_min <- leg$duration$value / 60
+
+    route_summary <- NA_character_
+    if (mode == "transit") {
+      steps <- leg$steps
+      if (!is.null(steps$transit_details)) {
+        short_names <- steps$transit_details$line$short_name
+        short_names <- short_names[!is.na(short_names)]
+        if (length(short_names) > 0) {
+          route_summary <- paste(unique(short_names), collapse = " + ")
+        }
+      }
+    }
+
+    tibble(
+      duration_min  = duration_min,
+      route_summary = route_summary,
+      status        = status,
+      error_message = err
+    )
+
+  }, error = function(e) {
+    tibble(
+      duration_min  = NA_real_,
+      route_summary = NA_character_,
+      status        = NA_character_,
+      error_message = as.character(e$message)
+    )
+  })
+
+  out
+}
+```
+
+
+## Call google for each sampled trip
+```{r}
+TYPICAL_TIME <- "2025-06-04 08:00:00"
+
+google_results <- sample_trips %>%
+  mutate(
+    bike_res = purrr::pmap(
+      list(start_lat, start_lon, end_lat, end_lon),
+      ~ get_google_duration(..1, ..2, ..3, ..4,
+                            mode   = "bicycling")
+    ),
+    transit_res = purrr::pmap(
+      list(start_lat, start_lon, end_lat, end_lon),
+      ~ get_google_duration(..1, ..2, ..3, ..4,
+                            mode          = "transit",
+                            departure_time = TYPICAL_TIME)
+    )
+  ) %>%
+  tidyr::unnest_wider(bike_res,    names_sep = "_") %>%
+  tidyr::unnest_wider(transit_res, names_sep = "_") %>%
+  dplyr::rename(
+    bike_min              = bike_res_duration_min,
+    bike_status           = bike_res_status,
+    bike_error            = bike_res_error_message,
+    transit_min           = transit_res_duration_min,
+    transit_route_summary = transit_res_route_summary,
+    transit_status        = transit_res_status,
+    transit_error         = transit_res_error_message
+  ) %>%
+  dplyr::mutate(
+    diff_bike_vs_transit  = bike_min   - transit_min,
+    diff_transit_vs_micro = transit_min - duration_micro_min,
+    diff_bike_vs_micro    = bike_min   - duration_micro_min
+  )
+```
+
+```{r}
+names(google_results)
+```
+
+```{r}
+table(google_results$transit_status, useNA = "ifany")
+head(google_results %>%
+       select(trip_id, bike_min, transit_min,
+              duration_micro_min, bike_status, transit_status,
+              transit_route_summary))
+```
+
+## Filter for only successful results
+```{r}
+google_success <- google_results %>%
+  filter(
+    bike_status    == "OK",
+    transit_status == "OK",
+    is.finite(bike_min),
+    is.finite(transit_min)
+  ) %>%
+  mutate(
+    diff_transit_vs_micro = transit_min - duration_micro_min,
+    diff_bike_vs_micro    = bike_min    - duration_micro_min,
+    diff_bike_vs_transit  = bike_min    - transit_min
+  )
+
+nrow(google_success)
+```
+
+## Summary
+```{r}
+summary_overall <- google_success %>%
+  summarise(
+    n_trips = n(),
+    
+    mean_micro_min   = mean(duration_micro_min, na.rm = TRUE),
+    mean_bike_min    = mean(bike_min,            na.rm = TRUE),
+    mean_transit_min = mean(transit_min,         na.rm = TRUE),
+    
+    mean_diff_transit_minus_micro = mean(diff_transit_vs_micro, na.rm = TRUE),
+    mean_diff_bike_minus_micro    = mean(diff_bike_vs_micro,    na.rm = TRUE),
+    mean_diff_bike_minus_transit  = mean(diff_bike_vs_transit,  na.rm = TRUE)
+  )
+
+summary_overall
+```
+
+```{r}
+summary_by_route <- google_success %>%
+  group_by(transit_route_summary) %>%
+  summarise(
+    n_trips = n(),
+    mean_micro_min   = mean(duration_micro_min,   na.rm = TRUE),
+    mean_transit_min = mean(transit_min,          na.rm = TRUE),
+    mean_diff_transit_minus_micro = mean(diff_transit_vs_micro, na.rm = TRUE)
+  ) %>%
+  arrange(desc(n_trips))
+
+summary_by_route
+```
+
+```{r}
+TYPICAL_TIME <- "2025-06-04 08:00:00" 
+
+test_result <- get_google_duration(
+  origin_lat = sample_trips$start_lat[1],
+  origin_lon = sample_trips$start_lon[1],
+  dest_lat   = sample_trips$end_lat[1],
+  dest_lon   = sample_trips$end_lon[1],
+  mode       = "transit",
+  departure_time = TYPICAL_TIME,
+  api_key    = "()"
+)
+
+test_result
+```
+
+
+```{r}
+TEST_O_LAT  <- 44.9780
+TEST_O_LON  <- -93.2650
+TEST_D_LAT  <- 44.9738
+TEST_D_LON  <- -93.2277
+
+test_result2 <- get_google_duration(
+  origin_lat = TEST_O_LAT,
+  origin_lon = TEST_O_LON,
+  dest_lat   = TEST_D_LAT,
+  dest_lon   = TEST_D_LON,
+  mode       = "transit",
+  departure_time = "2025-06-04 08:00:00",
+  api_key = "()"
+)
+
+test_result2
+```
+
+## Debug
+```{r}
+debug_google_call <- function(origin_lat, origin_lon,
+                              dest_lat, dest_lon,
+                              mode = c("bicycling", "transit"),
+                              departure_time = NULL,
+                              api_key) {
+
+  mode <- match.arg(mode)
+
+  if (is.null(departure_time)) {
+    departure_unix <- as.integer(Sys.time())
+  } else {
+    departure_unix <- as.integer(as.POSIXct(departure_time, tz = "UTC"))
+  }
+
+  base_url <- "https://maps.googleapis.com/maps/api/directions/json"
+
+  q <- list(
+    origin      = sprintf("%f,%f", origin_lat, origin_lon),
+    destination = sprintf("%f,%f", dest_lat,  dest_lon),
+    mode        = mode,
+    key         = api_key
+  )
+  if (mode == "transit") q$departure_time <- departure_unix
+
+  full_url <- modify_url(base_url, query = q)
+  cat("DEBUG URL (copy into browser):\n", full_url, "\n\n")
+
+  res  <- GET(full_url)
+  txt  <- content(res, "text", encoding = "UTF-8")
+  cont <- fromJSON(txt)
+
+  status <- cont$status
+  err    <- cont$error_message %||% NA_character_
+
+  duration_min <- if (identical(status, "OK")) {
+    cont$routes[[1]]$legs[[1]]$duration$value / 60
+  } else NA_real_
+
+  tibble(
+    duration_min  = duration_min,
+    route_summary = NA_character_,
+    status        = status,
+    error_message = err
+  )
+}
+```
+
+```{r}
+test_debug <- debug_google_call(
+  origin_lat = 44.9778,   # downtown mnpls
+  origin_lon = -93.2650,
+  dest_lat   = 44.9733,   # umn east bank-ish area
+  dest_lon   = -93.2260,
+  mode       = "transit",
+  departure_time = "2025-06-04 08:00:00",
+  api_key    = "()"
+)
+
+test_debug
+```
+
+
+
+
+
+
+
