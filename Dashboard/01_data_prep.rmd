@@ -32,11 +32,7 @@ routes_gtfs <- read_csv("../Data/gtfs/routes.csv")
 ```
 
 ```{r}
-stops_sf <- st_as_sf(
-stops,
-coords = c("stop_lon", "stop_lat"),
-crs = 4326
-) %>%
+stops_sf <- st_as_sf(stops,coords = c("stop_lon", "stop_lat"),crs = 4326) %>%
 st_transform(crs_proj)
 ```
 
@@ -53,46 +49,41 @@ names(road_centerlines)
 trips <- read_csv("../Data/scooter_trips_2025.csv")
 
 trips <- trips %>%
-mutate(
-StartCenterlineID = as.integer(StartCenterlineID),
-EndCenterlineID = as.integer(EndCenterlineID)
-) %>%
-filter(
-!is.na(StartCenterlineID),
-!is.na(EndCenterlineID)
-) %>%
-mutate(trip_id = row_number())
+  mutate(
+  StartCenterlineID = as.integer(StartCenterlineID),
+  EndCenterlineID = as.integer(EndCenterlineID)) %>%
+  filter(
+    !is.na(StartCenterlineID),
+    !is.na(EndCenterlineID)) %>%
+  mutate(trip_id = row_number())
 ```
 
 ```{r}
 valid_trips <- trips %>%
-filter(
-StartCenterlineID %in% road_centerlines$GBSID,
-EndCenterlineID %in% road_centerlines$GBSID)
+  filter(
+    StartCenterlineID %in% road_centerlines$GBSID,
+    EndCenterlineID %in% road_centerlines$GBSID)
 ```
 
 ```{r}
 trips_start <- valid_trips %>%
-left_join(
-road_centerlines %>% select(GBSID, geometry),
-by = c("StartCenterlineID" = "GBSID")
-) %>%
-rename(start_geometry = geometry) %>%
-st_as_sf(crs = crs_proj)
+  left_join(
+    road_centerlines %>% 
+      select(GBSID, geometry), by = c("StartCenterlineID" = "GBSID")) %>%
+  rename(start_geometry = geometry) %>%
+  st_as_sf(crs = crs_proj)
 
 trips_end <- valid_trips %>%
-left_join(
-road_centerlines %>% select(GBSID, geometry),
-by = c("EndCenterlineID" = "GBSID")
-) %>%
-rename(end_geometry = geometry) %>%
-st_as_sf(crs = crs_proj)
+  left_join(road_centerlines %>% 
+              select(GBSID, geometry),by = c("EndCenterlineID" = "GBSID")) %>%
+  rename(end_geometry = geometry) %>%
+  st_as_sf(crs = crs_proj)
 
 start_segments <- trips_start %>%
-select(trip_id, start_geometry)
+  select(trip_id, start_geometry)
 
 end_segments <- trips_end %>%
-select(trip_id, end_geometry)
+  select(trip_id, end_geometry)
 ```
 ```{r}
 state  <- "MN"
@@ -148,14 +139,23 @@ crs_proj <- 26915
 
 boardings_sf <- boardings_csv %>%
   transmute(
-    stop_id   = as.character(Site_id),  
-    boardings = as.numeric(Ons),  
-    lon       = Longitude,               
-    lat       = Latitude                
+    stop_id_raw   = as.character(Site_id),  
+    boardings     = as.numeric(Ons),     
+    alightings    = as.numeric(Offs),    
+    total_activity = boardings + alightings,
+    lon           = Longitude,
+    lat           = Latitude
   ) %>%
   st_as_sf(coords = c("lon", "lat"), crs = 4326) %>%
   st_transform(crs_proj)
+
 ```
+
+```{r}
+dir.create("../Dashboard/data", showWarnings = FALSE)
+saveRDS(stops_sf, "../Dashboard/data/stops_sf.rds")
+```
+
 ```{r}
 stops_sf <- readRDS("../Dashboard/data/stops_sf.rds")
 
@@ -167,13 +167,10 @@ boardings_sf <- boardings_sf %>%
 
 
 ```{r}
-dir.create("../Dashboard/data", showWarnings = FALSE)
-
 saveRDS(valid_trips, "../Dashboard/data/valid_trips.rds")
 saveRDS(road_centerlines,"../Dashboard/data/road_centerlines.rds")
-saveRDS(stops_sf, "../Dashboard/data/stops_sf.rds")
 saveRDS(start_segments, "../Dashboard/data/start_points.rds")
-saveRDS(end_segments, "../Dashboard/data/end_points.rds")
+saveRDS(end_segments, "../Dashboard/data/end_points.rds")                                                                                                                                                                                  
 saveRDS(stops, "../Dashboard/data/stops_gtfs.rds")
 saveRDS(stop_times, "../Dashboard/data/stop_times.rds")
 saveRDS(trips_gtfs, "../Dashboard/data/trips_gtfs.rds")

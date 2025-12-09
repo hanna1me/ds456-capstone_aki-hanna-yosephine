@@ -21,38 +21,122 @@ start_points <- readRDS("../Dashboard/data/start_points.rds")
 
 ```{r}
 grid <- st_make_grid(st_union(road_centerlines), cellsize = 200) %>%
-st_sf() %>% mutate(grid_id = row_number())
+  st_sf() %>% 
+  mutate(grid_id = row_number())
 
 grid_density <- st_join(grid, start_points) %>%
-st_drop_geometry() %>%
-count(grid_id, name = "n") %>%
-right_join(grid, by = "grid_id") %>%
-mutate(n = if_else(is.na(n), 0L, n)) %>%
-st_as_sf()
+  st_drop_geometry() %>%
+  count(grid_id, name = "n") %>%
+  right_join(grid, by = "grid_id") %>%
+  mutate(n = if_else(is.na(n), 0L, n)) %>%
+  st_as_sf()
 
-grid_density_nonzero <- grid_density %>% filter(n > 1)
+grid_density_nonzero <- grid_density %>% 
+  filter(n > 1)
 
 max_cutoff <- quantile(grid_density_nonzero$n, 0.99, na.rm = TRUE)
 
 grid_density_nonzero <- grid_density_nonzero %>%
-mutate(n_trimmed = pmin(n, max_cutoff))
+  mutate(n_trimmed = pmin(n, max_cutoff))
+```
+
+```{r}
+boardings_sf <- readRDS("../Dashboard/data/stop_boardings_sf.rds")
+```
+
+```{r}
+grid_alight <- st_join(grid, boardings_sf) %>%
+  st_drop_geometry() %>%
+  group_by(grid_id) %>%
+  summarise(
+    alightings = sum(alightings, na.rm = TRUE) ) %>%
+  right_join(grid, by = "grid_id") %>%
+  mutate(
+    alightings = if_else(is.na(alightings), 0, alightings)) %>%
+  st_as_sf()
+
+grid_alight_nonzero <- grid_alight %>%
+  filter(alightings > 0)
+
+max_cutoff_alight <- quantile(grid_alight_nonzero$alightings, 0.99, na.rm = TRUE)
+
+grid_alight_nonzero <- grid_alight_nonzero %>%
+  mutate(alight_trimmed = pmin(alightings, max_cutoff_alight))
+
 ```
 
 ```{r}
 breaks <- c(1, 20, 50, 100, 200, 400, 800, 1600, 3200, 6400)
 
+tmap_mode("plot")
+
+map_scooter <- 
+  tm_shape(road_centerlines) +
+  tm_lines(col = "grey80") +
+  tm_shape(grid_density_nonzero) +
+  tm_polygons(
+    col        = "n_trimmed",
+    palette    = "YlOrRd",
+    border.col = NA,
+    breaks     = breaks,
+    title      = "Scooter Trip Starts"
+  ) +
+  tm_layout(
+    legend.outside = FALSE,
+    # frame = FALSE
+  )
+
+map_alight <- 
+  tm_shape(road_centerlines) +
+  tm_lines(col = "grey80") +
+  tm_shape(grid_alight_nonzero) +
+  tm_polygons(
+    col        = "alight_trimmed",
+    palette    = "YlGnBu",
+    border.col = NA,
+    breaks     = breaks, 
+    title      = "Bus Alightings"
+  ) +
+  tm_layout(
+    legend.outside = FALSE,
+    # frame = FALSE
+  )
+
+tmap_arrange(map_scooter, map_alight, ncol = 2)
+
+```
+```{r}
 tmap_mode("view")
 
+road_centerlines_ll     <- st_transform(road_centerlines, 4326)
+grid_density_nonzero_ll <- st_transform(grid_density_nonzero, 4326)
+grid_alight_nonzero_ll  <- st_transform(grid_alight_nonzero, 4326)
+
 tm_basemap("OpenStreetMap") +
-tm_shape(grid_density_nonzero) +
-tm_polygons(
-col = "n_trimmed",
-palette = "YlOrRd",
-alpha = 0.5,
-border.col = NA,
-breaks = breaks,
-title = "Trip Start Density"
-) +
-tm_layout(legend.outside = TRUE)
+  tm_shape(road_centerlines_ll, name = "Roads") +
+  tm_lines() +
+  tm_shape(grid_density_nonzero_ll, name = "Scooter Trip Starts") +
+  tm_polygons(
+    fill        = "n_trimmed",
+    fill.scale  = tm_scale(values = "brewer.yl_or_rd", breaks = breaks),
+    fill.legend = tm_legend(title = "Scooter Trip Starts"),
+    fill_alpha  = 0.6,
+    border_lwd  = 0
+  ) +
+  tm_shape(grid_alight_nonzero_ll, name = "Bus Alightings") +
+  tm_polygons(
+    fill        = "alight_trimmed",
+    fill.scale  = tm_scale(values = "brewer.yl_gn_bu", breaks = breaks),
+    fill.legend = tm_legend(title = "Bus Alightings"),
+    fill_alpha  = 0.6,
+    border_lwd  = 0
+  ) +
+  tm_view(
+    layer.visible = c("Roads", "Scooter Trip Starts"))
 ```
+
+
+
+
+
 

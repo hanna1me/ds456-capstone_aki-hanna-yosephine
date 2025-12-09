@@ -28,10 +28,11 @@ end_points <- readRDS("../Dashboard/data/end_points.rds")
 stops_sf <- readRDS("../Dashboard/data/stops_sf.rds")
 road_centerlines <- readRDS("../Dashboard/data/road_centerlines.rds")
 tracts_census_sf <- readRDS("../Dashboard/data/tracts_census_sf.rds")
-boardings_sf <- readRDS("../Analysis/data/stop_boardings_sf.rds")
+boardings_sf <- readRDS("../Dashboard/data/stop_boardings_sf.rds")
 ```
 
 ```{r}
+crs_proj <- 26915
 start_points <- st_as_sf(start_points)
 end_points <- st_as_sf(end_points)
 stops_sf <- st_as_sf(stops_sf)
@@ -62,12 +63,11 @@ trips_with_behavior <- valid_trips %>%
 left_join(behavior_df %>% select(trip_id, behavior_type),
 by = "trip_id") %>%
 mutate(
-
-start_time = suppressWarnings(ymd_hms(StartTime)),
-date = as_date(start_time),
-hour = hour(start_time),
-weekday = wday(start_time, label = TRUE, week_start = 1),
-day_type = if_else(weekday %in% c("Sat", "Sun"), "Weekend", "Weekday")
+  start_time = suppressWarnings(ymd_hms(StartTime)),
+  date = as_date(start_time),
+  hour = hour(start_time),
+  weekday = wday(start_time, label = TRUE, week_start = 1),
+  day_type = if_else(weekday %in% c("Sat", "Sun"), "Weekend", "Weekday")
 ) %>%
 filter(!is.na(start_time))
 ```
@@ -85,9 +85,7 @@ mutate(
 pct = n / sum(n),
 behavior_type = factor(
 behavior_type,
-levels = c("none", "first_mile", "last_mile", "sub_multi", "sub_one")
-)
-)
+levels = c("none", "first_mile", "last_mile", "sub_multi", "sub_one")))
 
 behavior_counts
 ```
@@ -97,7 +95,7 @@ ggplot(behavior_counts,
 aes(x = behavior_type, y = pct, fill = behavior_type)) +
 geom_col() +
 scale_y_continuous(labels = percent_format(accuracy = 1)) +
-scale_fill_viridis_d(option = "C", end = 0.9) +
+scale_fill_viridis_d(option = "D", end = 0.9) +
 labs(
 title = "Composition of Scooter Trip Types",
 x = "Behavior type",
@@ -113,6 +111,15 @@ group_by(day_type, behavior_type, date, hour) %>%
 summarise(n = n(), .groups = "drop") %>%
 group_by(day_type, behavior_type, hour) %>%
 summarise(avg_trips = mean(n), .groups = "drop")
+
+hourly_share <- trips_core %>%
+  group_by(day_type, date, hour, behavior_type) %>%
+  summarise(n = n(), .groups = "drop") %>%
+  group_by(day_type, date, hour) %>%
+  mutate(hour_total = sum(n),
+         share      = n / hour_total) %>%
+  group_by(day_type, behavior_type, hour) %>%
+  summarise(avg_share = mean(share), .groups = "drop")
 ```
 
 ```{r}
@@ -130,6 +137,22 @@ y = "Avg trips per hour"
 ) +
 theme_minimal()
 ```
+```{r}
+ggplot(hourly_share,
+aes(x = hour, y = avg_share,
+color = behavior_type, group = behavior_type)) +
+geom_line(size = 1.1) +
+facet_wrap(~ day_type, ncol = 1) +
+scale_x_continuous(breaks = 0:23) +
+scale_color_viridis_d(option = "D", end = 0.9) +
+labs(
+title = "Average Hourly Scooter Trip Share by Behavior Type",
+x = "Hour of day",
+y = "Avg trip share per hour"
+) +
+theme_minimal()
+```
+
 
 ```{r}
 behavior_simplified <- c("sub_one", "first_mile", "last_mile", "none")
@@ -171,9 +194,11 @@ by_element = TRUE)
 
 start_points_beh <- start_points_beh %>%
 mutate(
-dist_to_nearest_stop = as.numeric(dist_to_stop) # in meters
+dist_to_nearest_stop = as.numeric(dist_to_stop) 
 )
 ```
+
+
 ```{r}
 ggplot(start_points_beh,
 aes(x = behavior_type, y = dist_to_nearest_stop)) +
@@ -249,8 +274,10 @@ top_leaky <- route_stats %>%
 filter(!is.na(leakiness)) %>%
 arrange(desc(leakiness)) %>%
 slice_head(n = 10) %>%
-mutate(route_short_name = factor(route_short_name,
-levels = route_short_name[order(leakiness)]))
+mutate(route_short_name = factor(
+  route_short_name,
+  levels = route_short_name[order(leakiness, decreasing = TRUE)]
+))
 
 ggplot(top_leaky,
 aes(x = route_short_name, y = leakiness)) +
@@ -265,6 +292,22 @@ y = "Leakiness (subs / boardings)"
 theme_minimal()
 }
 ```
+```{r}
+priority_routes <- route_stats %>%
+  filter(!is.na(leakiness),
+         route_boardings > 0) %>%
+  # keep only routes with non-trivial use
+  filter(route_sub_trips >= 20,
+         route_boardings >= quantile(route_boardings, 0.5, na.rm = TRUE)) %>%
+  mutate(
+    # more subs & more boardings -> higher priority
+    priority_score = leakiness * log1p(route_boardings)
+  ) %>%
+  arrange(desc(priority_score)) %>%
+  slice_head(n = 10)
+
+priority_routes
+```
 
 gap intensity
 
@@ -275,27 +318,27 @@ filter(behavior_type == "none")
 all_trips <- trips_core
 ```
 ```{r}
-bbox_union <- st_union(road_centerlines)
-grid <- st_make_grid(bbox_union, cellsize = 500) %>% # 500m grid
-st_sf(grid_id = 1(.))
+bbox_union <- st_bbox(road_centerlines) %>% 
+  st_as_sfc() %>% 
+  st_buffer(200) 
+grid <- st_make_grid(bbox_union, cellsize = 500) %>% 
+  st_sf(grid_id = seq_len(length(.)), geometry = .)
+
 
 start_with_behavior <- start_points %>%
 left_join(behavior_df %>% select(trip_id, behavior_type),
 by = "trip_id")
 
 grid_counts <- st_join(grid, start_with_behavior) %>%
-st_drop_geometry() %>%
-group_by(grid_id) %>%
-summarise(
-all_trips = n(),
-gap_trips = sum(behavior_type == "none", na.rm = TRUE),
-.groups = "drop"
-) %>%
-mutate(
-gap_share = if_else(all_trips > 0, gap_trips / all_trips, NA_real_)
-) %>%
-right_join(grid, by = "grid_id") %>%
-st_as_sf()
+  group_by(grid_id) %>%
+  summarise(
+    all_trips = n(),
+    gap_trips = sum(behavior_type == "none", na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    gap_share = if_else(all_trips > 0, gap_trips / all_trips, NA_real_)
+  )
 ```
 
 ```{r}
@@ -311,9 +354,288 @@ textNA = "No trips"
 ) +
 tm_layout(
 title = "Where Scooters Operate Far from Transit",
-legend.outside = TRUE
+legend.outside = TRUE,
+component.autoscale = FALSE
 )
 
 ```
+
+```{r}
+# Make sure tracts and starts are in same CRS
+tracts_census_sf <- st_as_sf(tracts_census_sf) %>%
+  st_transform(crs_proj)
+
+# Use start_points_beh (start segment + behavior_type)
+# For tract membership, it's fine to approximate each start by its centroid
+start_points_cent <- start_points_beh %>%
+  st_centroid()
+
+# Join scooter starts into tracts
+start_in_tracts <- st_join(tracts_census_sf, start_points_cent)
+
+trips_by_tract <- start_in_tracts %>%
+  st_drop_geometry() %>%
+  group_by(GEOID) %>%
+  summarise(
+    all_trips     = n(),
+    sub_one_trips = sum(behavior_type == "sub_one", na.rm = TRUE),
+    gap_trips     = sum(behavior_type == "none",    na.rm = TRUE),
+    .groups = "drop"
+  )
+
+tracts_stats <- tracts_census_sf %>%
+  left_join(trips_by_tract, by = "GEOID") %>%
+  mutate(
+    all_trips     = if_else(is.na(all_trips),     0L, all_trips),
+    sub_one_trips = if_else(is.na(sub_one_trips), 0L, sub_one_trips),
+    gap_trips     = if_else(is.na(gap_trips),     0L, gap_trips),
+    sub_share     = if_else(all_trips > 0, sub_one_trips / all_trips, NA_real_),
+    gap_share     = if_else(all_trips > 0, gap_trips     / all_trips, NA_real_)
+  )
+
+```
+```{r}
+# Aggregate boardings into tracts
+stops_by_tract <- st_join(tracts_stats, boardings_sf) %>%
+  st_drop_geometry() %>%
+  group_by(GEOID) %>%
+  summarise(
+    total_boardings = sum(boardings, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+tracts_stats <- tracts_stats %>%
+  left_join(stops_by_tract, by = "GEOID") %>%
+  mutate(
+    total_boardings   = if_else(is.na(total_boardings), 0, total_boardings),
+    area_km2          = as.numeric(st_area(tracts_stats)) / 1e6,
+    boardings_density = if_else(area_km2 > 0,
+                                total_boardings / area_km2,
+                                NA_real_)
+  )
+
+```
+
+```{r}
+tmap_mode("plot")
+
+tm_shape(tracts_stats) +
+  tm_polygons(
+    col     = "sub_share",
+    palette = "viridis",
+    style   = "cont",
+    title   = "Substitution share",
+    textNA  = "No trips"
+  ) +
+  tm_shape(boardings_sf) +
+  tm_dots(
+    col   = "grey40",
+    size  = 0.05,
+    alpha = 0.5
+  ) +
+  tm_layout(
+    title = "Where scooters most often duplicate a single bus route",
+    legend.outside = TRUE
+  )
+
+```
+```{r}
+tm_shape(tracts_stats) +
+  tm_polygons(
+    col     = "gap_share",
+    palette = "magma",
+    style   = "cont",
+    title   = "Gap share",
+    textNA  = "No trips"
+  ) +
+  tm_shape(boardings_sf) +
+  tm_dots(
+    col   = "grey40",
+    size  = 0.05,
+    alpha = 0.5
+  ) +
+  tm_layout(
+    title = "Where scooters operate beyond walking distance of transit",
+    legend.outside = TRUE
+  )
+
+```
+```{r}
+ggplot(tracts_stats,
+       aes(x = boardings_density, y = sub_share,
+           color = median_income)) +
+  geom_point(alpha = 0.7) +
+  scale_x_continuous(trans = "log10",
+                     labels = comma_format()) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_color_viridis_c(option = "C") +
+  labs(
+    title = "Substitution share vs transit strength & income",
+    x = "Boardings density (log scale)",
+    y = "One-route substitution share",
+    color = "Median income"
+  ) +
+  theme_minimal()
+
+```
+```{r}
+ggplot(tracts_stats,
+       aes(x = boardings_density, y = gap_share,
+           color = zero_car_share)) +
+  geom_point(alpha = 0.7) +
+  scale_x_continuous(trans = "log10",
+                     labels = comma_format()) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
+  scale_color_viridis_c(option = "C") +
+  labs(
+    title = "Gap share vs transit strength & car access",
+    x = "Boardings density (log scale)",
+    y = "Gap share",
+    color = "Zero-car household share"
+  ) +
+  theme_minimal()
+
+```
+```{r}
+# avoid NA issues
+tracts_priority <- tracts_stats %>%
+  filter(!is.na(gap_share),
+         !is.na(population),
+         !is.na(zero_car_share),
+         !is.na(boardings_density))
+
+tracts_priority <- tracts_priority %>%
+  mutate(
+    # decile ranks for each factor
+    d_gap   = ntile(gap_share,        10),
+    d_pop   = ntile(population,       10),
+    d_zero  = ntile(zero_car_share,   10),
+    d_trans = ntile(-boardings_density, 10) # negative -> high rank for low transit
+  ) %>%
+  mutate(
+    gap_priority_score = d_gap + d_pop + d_zero + d_trans
+  ) %>%
+  arrange(desc(gap_priority_score))
+
+priority_gap_tracts <- tracts_priority %>%
+  slice_head(n = 10) %>%
+  st_drop_geometry() %>%
+  select(GEOID, population, median_income, zero_car_share,
+         boardings_density, gap_share, gap_priority_score)
+
+priority_gap_tracts
+
+```
+```{r}
+tracts_priority_sub <- tracts_stats %>%
+  filter(!is.na(sub_share),
+         !is.na(population),
+         !is.na(boardings_density))
+
+tracts_priority_sub <- tracts_priority_sub %>%
+  mutate(
+    d_sub   = ntile(sub_share,      10),
+    d_pop   = ntile(population,     10),
+    d_trans = ntile(boardings_density, 10)  # here we want high transit + high subs
+  ) %>%
+  mutate(
+    sub_priority_score = d_sub + d_pop + d_trans
+  ) %>%
+  arrange(desc(sub_priority_score))
+
+priority_sub_tracts <- tracts_priority_sub %>%
+  slice_head(n = 10) %>%
+  st_drop_geometry() %>%
+  select(GEOID, population, median_income,
+         boardings_density, sub_share, sub_priority_score)
+
+priority_sub_tracts
+
+```
+```{r}
+# GAP GRID IN THE SAME STYLE AS 02 Trip Density
+
+# 200m grid over the road network (same pattern as your density map)
+grid <- st_make_grid(st_union(road_centerlines), cellsize = 200) %>%
+  st_sf() %>%
+  mutate(grid_id = row_number())
+
+# attach behavior_type to starts
+start_with_behavior <- start_points %>%
+  left_join(behavior_df %>% select(trip_id, behavior_type),
+            by = "trip_id")
+
+# count all trips and "gap" trips in each grid cell, then compute share
+grid_counts <- st_join(grid, start_with_behavior) %>%
+  st_drop_geometry() %>%
+  group_by(grid_id) %>%
+  summarise(
+    all_trips = n(),
+    gap_trips = sum(behavior_type == "none", na.rm = TRUE),
+    .groups   = "drop"
+  ) %>%
+  mutate(
+    gap_share = if_else(all_trips > 0, gap_trips / all_trips, NA_real_)
+  ) %>%
+  right_join(grid, by = "grid_id") %>%
+  st_as_sf()
+
+# keep cells that actually have some scooter activity and valid gap_share
+grid_counts_nonzero <- grid_counts %>%
+  filter(!is.na(gap_share), all_trips > 5)
+
+# trim the very top tail so legend isn't dominated by outliers
+max_cutoff <- quantile(grid_counts_nonzero$gap_share, 0.99, na.rm = TRUE)
+
+grid_counts_nonzero <- grid_counts_nonzero %>%
+  mutate(gap_share_trimmed = pmin(gap_share, max_cutoff))
+
+# breaks from 0 up to the trimmed max
+breaks_gap <- seq(0, max_cutoff, length.out = 8)
+
+tmap_mode("view")
+
+tm_basemap("OpenStreetMap") +
+  tm_shape(grid_counts_nonzero) +
+  tm_polygons(
+    col        = "gap_share_trimmed",
+    palette    = "magma",
+    alpha      = 0.5,
+    border.col = NA,
+    breaks     = breaks_gap,
+    title      = "Gap trip share"
+  ) +
+  tm_layout(
+    title          = "Where Scooters Operate Far from Transit",
+    legend.outside = TRUE
+  )
+
+
+```
+
+```{r}
+tmap_mode("plot")
+
+tm_shape(road_centerlines) +
+  tm_lines(col = "lightgray", lwd = 0.5, alpha = 0.5) +
+  tm_shape(grid_counts_nonzero) +
+  tm_polygons(
+    col        = "gap_share_trimmed",
+    palette    = "magma",
+    alpha      = 0.6,
+    border.col = NA,
+    breaks     = breaks_gap,
+    title      = "Gap trip share"
+  ) +
+  tm_layout(
+    title          = "Where Scooters Operate Far from Transit",
+    legend.outside = TRUE
+  )
+
+```
+
+- low-hanging fruits
+- serving the most number of people
+- 
 
 
