@@ -16,54 +16,60 @@ library(scales)
 
 same_route_trips_expanded <- readRDS("../Dashboard/data/same_route_trips_expanded.rds")
 valid_trips <- readRDS("../Dashboard/data/valid_trips.rds")
-
 ```
 
 
 ```{r}
-overlap_trips <- same_route_trips_expanded %>% left_join(valid_trips, by = "trip_id")
-```
-
-```{r}
-overlap_trips <- overlap_trips %>%
+overlap_trips <- same_route_trips_expanded %>%
+  left_join(valid_trips, by = "trip_id") %>%
+  distinct(trip_id, .keep_all = TRUE) %>% 
   mutate(
     start_time = ymd_hms(StartTime),
     date = as_date(start_time),
     hour = hour(start_time),
-    weekday = wday(start_time, label = TRUE),
-    day_type = if_else(weekday %in% c("Sat", "Sun"), "Weekend", "Weekday")
-  )
+    weekday = wday(start_time, label = TRUE), 
+    day_type = if_else(weekday %in% c("Sat", "Sun"), "Weekend", "Weekday" )) %>%
+  filter(!is.na(start_time), !is.na(TripDuration))
 ```
-# aggregate the hourly overlap by day, because weekdays have more days than weekends
 
 ```{r}
-hourly_overlap <- overlap_trips %>%
-  count(hour)
+# all scooter trips by hour
 
-ggplot(hourly_overlap, aes(x = hour, y = n)) +
+all_trips_hourly <- valid_trips %>%
+  mutate(start_time = ymd_hms(StartTime),
+         hour = hour(start_time)) %>%
+  filter(!is.na(start_time)) %>%
+  count(hour, name = "total_trips")
+
+# overlapping trips by hour and share
+
+overlap_hourly_share <- overlap_trips %>%
+  count(hour, name = "overlap_trips") %>%
+  left_join(all_trips_hourly, by = "hour") %>%
+  mutate(share = overlap_trips / total_trips)
+```
+```{r}
+ggplot(overlap_hourly_share, aes(x = hour, y = share)) +
   geom_col(fill = "darkred") +
   scale_x_continuous(breaks = 0:23) +
+  scale_y_continuous(labels = percent_format(accuracy = 1)) +
   labs(
-    title = "Overlapping Scooter Trips by Hour of Day",
-    x = "Hour (0 = Midnight)",
-    y = "Number of Trips"
-  ) +
+    title = "Share of Scooter Trips with Single-Route Transit Alternative",
+    x = "Hour of Day",
+    y = "Share of Trips") +
   theme_minimal()
 ```
+
 
 ```{r}
 daily_counts <- overlap_trips %>%
   count(date, day_type)
-```
 
-
-```{r}
 avg_daily_overlap <- daily_counts %>%
   group_by(day_type) %>%
-  summarise(
-    avg_trips_per_day = mean(n),
-    days_count = n()
-  )
+  summarise(avg_trips_per_day = mean(n),
+            days_count = n(),
+            .groups = "drop")
 
 avg_daily_overlap
 ```
@@ -76,47 +82,48 @@ ggplot(avg_daily_overlap, aes(x = day_type, y = avg_trips_per_day, fill = day_ty
     title = "Average Overlapping Trips per Day",
     subtitle = "Adjusted for number of weekdays vs weekends",
     x = "",
-    y = "Average trips per day"
-  ) +
+    y = "Average trips per day") +
   theme_minimal() +
   theme(legend.position = "none")
-
 ```
+
+
 ```{r}
 overlap_trips %>%
   group_by(hour, day_type) %>%
   summarise(n = n(), .groups = "drop") %>%
   ggplot(aes(x = hour, y = n, color = day_type)) +
-  scale_color_manual(values = c("Weekday" = "#21908d", "Weekend" = "#3b528b")) +
   geom_line(size = 1.2) +
+  scale_color_manual(values = c("Weekday" = "#21908d", "Weekend" = "#3b528b")) +
   scale_x_continuous(breaks = 0:23) +
   labs(
     title = "Hourly Overlap Pattern: Weekday vs Weekend",
-    x = "Hour",
-    y = "Number of Overlapping Trips"
-  ) +
+    x     = "Hour",
+    y     = "Number of Overlapping Trips") +
   theme_classic()
+
 ```
+
 ```{r}
-ggplot(overlap_trips, aes(x = TripDuration/60)) +
+ggplot(overlap_trips, aes(x = TripDuration / 60)) +
   geom_histogram(fill = "#440154", bins = 40) +
   labs(
     title = "Distribution of Overlapping Trip Durations",
-    x = "Trip Duration (minutes)",
-    y = "Number of Trips"
-  ) +
+    x     = "Trip Duration (minutes)",
+    y     = "Number of Trips") +
   theme_minimal() +
   xlim(0, 100)
-``` 
+```
 ```{r}
-ggplot(overlap_trips, aes(x = TripDuration/60, fill = day_type)) +
+ggplot(overlap_trips, aes(x = TripDuration / 60, fill = day_type)) +
   geom_histogram(alpha = 0.6, bins = 40, position = "identity") +
   labs(
     title = "Trip Duration Distribution by Day Type",
-    x = "Duration (minutes)",
-    y = "Trips"
-  ) +
+    x     = "Duration (minutes)",
+    y     = "Trips") +
   theme_minimal() +
-  xlim(0, 100) 
+  xlim(0, 100)
 ```
+
+
 

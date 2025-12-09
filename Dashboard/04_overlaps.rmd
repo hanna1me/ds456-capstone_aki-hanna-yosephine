@@ -57,15 +57,30 @@ summarise(routes_end = list(route_id), .groups = "drop")
 ```
 ```{r}
 trip_routes <- sub_candidates %>%
-  left_join(start_routes_lookup,by = c("start_stop_id" = "stop_id")) %>%
-  left_join(end_routes_lookup,by = c("end_stop_id" = "stop_id")) %>%
+  left_join(start_routes_lookup, by = c("start_stop_id" = "stop_id")) %>%
+  left_join(end_routes_lookup,   by = c("end_stop_id"   = "stop_id")) %>%
   rowwise() %>%
-  mutate(shared_routes = list(
-    if (!is.null(routes_start) && !is.null(routes_end)) {intersect(routes_start, routes_end)} 
-    else {integer(0)})) %>% 
+  mutate(
+    shared_routes = list({
+      if (!is.null(routes_start) && !is.null(routes_end) &&
+          !all(is.na(routes_start)) && !all(is.na(routes_end))) {
+        intersect(routes_start, routes_end)
+      } else {
+        integer(0)
+      }
+    })
+  ) %>%
   ungroup()
 
 ```
+```{r}
+trip_routes <- trip_routes %>%
+  mutate(num_shared_routes = lengths(shared_routes))
+
+same_route_trips <- trip_routes %>%
+  filter(num_shared_routes > 0)
+```
+
 ```{r}
 same_route_trips <- trip_routes %>%
   filter(lengths(shared_routes) > 0)
@@ -77,12 +92,10 @@ head(same_route_trips)
 
 ```{r}
 same_route_trips_expanded <- same_route_trips %>%
-tidyr::unnest(cols = c(shared_routes)) %>%
-rename(route_id = shared_routes) %>%
-left_join(
-routes_gtfs %>% select(route_id, route_short_name, route_long_name),
-by = "route_id"
-)
+  tidyr::unnest(cols = c(shared_routes)) %>%
+  rename(route_id = shared_routes) %>%
+  left_join(routes_gtfs %>% 
+              select(route_id, route_short_name, route_long_name),by = "route_id")
 ```
 
 ```{r}
