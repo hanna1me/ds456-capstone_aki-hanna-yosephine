@@ -65,6 +65,20 @@ ggplot(overlap_gap_counts, aes(x = "", y = n, fill = type)) +
   theme(legend.title = element_blank())
 
 ```
+```{r}
+
+avg_daily_overlap$Percent <- avg_daily_overlap$days_count / sum(avg_daily_overlap$days_count) * 100
+
+ggplot(avg_daily_overlap, aes(x = "", y = 'days_count', fill = 'day_type')) +
+  geom_col(width = 1) +
+  geom_text(aes(label = paste0(round(Percent, 1), "%")),
+            position = position_stack(vjust = 0.5), color = "white") +
+  coord_polar(theta = "y") +
+  labs(title = "Trip Categories") +
+  theme_void() +
+  theme(legend.title = element_blank())
+
+```
 
 ```{r}
 valid_trips %>%
@@ -76,7 +90,16 @@ valid_trips %>%
   )) %>%
   count(DurationCat) %>%
   ggplot(aes(x = DurationCat, y = n)) +
-  geom_col()
+  geom_col() +
+  labs(
+    title = "How long do people use Lime Scooter for",
+    x = "Minutes",
+    y = "Count"
+  ) +
+  scale_x_discrete(
+    labels = 1:10  
+  ) +
+  theme_minimal()
 
 
 ```
@@ -85,15 +108,25 @@ valid_trips %>%
   filter(TripDistance >= 0, TripDistance <= 3000) %>% 
   mutate(DistanceCat = cut(
     TripDistance,
-    breaks = seq(0, 30000, by = 100),                  
+    breaks = seq(0, 3000, by = 100),   # 100-meter bins
     include.lowest = TRUE
   )) %>%
-  count(DistanceCat) %>%                              
+  count(DistanceCat) %>%   
   ggplot(aes(x = DistanceCat, y = n)) +
   geom_col() +
-  labs(x = "Trip distance (binned)",
-       y = "Count of trips") +
-  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+  labs(
+    title = "How far do people ride Lime Scooters?",
+    x = "Meters (per 100)",
+    y = "Count of trips"
+  ) +
+  scale_x_discrete(
+    labels = seq(0, 2900, by = 100)
+  ) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1)
+  ) +
+  theme_minimal()
+
 ```
 ```{r}
 
@@ -204,9 +237,4 @@ endLines <- ggplot() +
 
 
 
-```
-
-```{r}
-ggplot(data = scooter_index) %>%
-  geom_point(aes(x = Trip))
 ```
