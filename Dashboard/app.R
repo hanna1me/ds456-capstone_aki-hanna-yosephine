@@ -48,6 +48,27 @@ ui <- fluidPage(
       "Story overview",
       
       br(),
+      h2("Executive summary & key assumptions"),
+      p(
+        strong("What this dashboard does: "),
+        "This tool uses scooter trip records and transit stop data in Minneapolis to ask whether scooters are mostly ",
+        strong("connecting people to transit"),
+        " (first/last mile) or ",
+        strong("substituting for transit"),
+        " (sub_one / sub_multi), and where they appear to fill ",
+        strong("access gaps"),
+        " beyond walking distance of bus stops."
+      ),
+      p(
+        strong("Key assumptions about behaviour types: "),
+        "Because scooter locations are anonymized to street segments (centerlines), we infer behaviour purely from segment proximity to transit stops (that is, whether or not there are bus stops along that segment of transits).",
+      ),
+      p(
+        "These classifications are an approximation. They do not prove that riders actually boarded transit; ",
+        "they show where scooters are ",
+        strong("able"),
+        " to act as access or substitutes based on network geometry."
+      ),
       h2("1. How are scooters being used overall?"),
       p(
         "We classify each scooter trip into one of five behaviour types based on whether the ",
@@ -58,11 +79,40 @@ ui <- fluidPage(
       ),
       p("Behavioural categories reflect how scooters interact with transit:"),
       tags$ul(
-        tags$li(strong("none:"),       " segment not near a stop; riders likely beyond transit reach."),
-        tags$li(strong("first_mile:")," ends near transit; riders likely heading into the network."),
-        tags$li(strong("last_mile:"), " starts near transit; riders finishing trips after transit."),
-        tags$li(strong("sub_multi:"), " both ends near stops but require transfers on transit."),
-        tags$li(strong("sub_one:"),   " both ends near stops served by a single bus—trip could be replaced by one route.")
+        tags$li(
+          strong("none: "),
+          "neither the start nor end segment is within 30 m of a transit stop. ",
+          "We interpret these as trips beyond normal walking distance of the transit network (access gaps)."
+        ),
+        tags$li(
+          strong("first_mile: "),
+          "the scooter trip ",
+          strong("ends"),
+          " within 30 m of a transit stop; we assume riders are heading ",
+          strong("into"),
+          " the transit network."
+        ),
+        tags$li(
+          strong("last_mile: "),
+          "the scooter trip ",
+          strong("starts"),
+          " within 30 m of a transit stop; we assume riders are ",
+          strong("continuing a trip after leaving"),
+          " the transit network."
+        ),
+        tags$li(
+          strong("sub_multi: "),
+          "both ends are near transit stops, but connected by ",
+          strong("multiple transit routes or transfers"),
+          ". Scooters may be replacing a more complex transit journey."
+        ),
+        tags$li(
+          strong("sub_one: "),
+          "both ends are near transit stops served by the same bus route; ",
+          "the scooter trip could reasonably be replaced by a ",
+          strong("single bus ride"),
+          "."
+        )
       ),
       p("The bar chart shows what share of scooter trips fall into each category."),
       plotOutput("plot_behavior_comp", height = "350px"),
@@ -143,6 +193,14 @@ ui <- fluidPage(
         "scooters are acting as substitutes rather than connectors."
       ),
       p(
+        "For example, if a route has 3,000 annual bus boardings and we observe 300 scooter trips ",
+        "that start and end near stops on that route, its leakiness is ",
+        code("300 / 3,000 = 0.10"),
+        ", or ",
+        strong("10%"),
+        ". Very low-boarded routes are excluded here so that these ratios remain interpretable."
+      ),
+      p(
         strong("Data disclaimer: "),
         "the boarding/alighting dataset may not include every stop or route in Minneapolis. ",
         "Leakiness is directional—useful for identifying candidates for further evaluation, ",
@@ -150,7 +208,7 @@ ui <- fluidPage(
       ),
       plotOutput("plot_leaky_routes", height = "360px"),
       p(
-        strong("Policy angle: "),
+        strong("Takeaway: "),
         "these routes represent low-cost opportunities to retain riders through improvements such as ",
         "stop amenities, signal priority, pricing alignment, or integrated micromobility at key stops."
       ),
@@ -201,20 +259,56 @@ ui <- fluidPage(
       
       h4("Neighbourhoods where scooters fill serious access gaps (low income + low car ownership)"),
       p(
-        "Gap priority emphasizes equity-sensitive characteristics and transit deprivation:"
+        "Gap priority emphasizes equity-sensitive characteristics and transit deprivation. ",
+        "We convert each variable into deciles (1–10) and then build a weighted score:"
       ),
       tags$ul(
-        tags$li(strong("High gap share:"),       " many scooter trips far from transit"),
-        tags$li(strong("Low median income:"),    " fewer economic alternatives"),
-        tags$li(strong("High zero-car share:"),  " heavy reliance on non-auto modes"),
-        tags$li(strong("Low boardings density:")," transit access is physically poor")
+        tags$li(strong("Gap share (more weight): "), "tracts where many scooter trips are far from transit."),
+        tags$li(strong("Median income (more weight): "), "tracts with lower incomes get higher scores."),
+        tags$li(strong("Zero-car share: "), "tracts with more households without cars."),
+        tags$li(strong("Boardings density: "), "tracts with fewer transit boardings per km²."),
+        tags$li(strong("Population: "), "tracts where more people are affected.")
       ),
-      code("gap_priority_score = decile(gap_share) + decile(zero_car_share) + decile(-boardings_density) + decile(-median_income)"),
+      code("gap_priority_score = 1.5·decile(gap_share) + 1.5·decile(-median_income) + decile(zero_car_share) + decile(-boardings_density) + decile(population)"),
       br(), br(),
       DTOutput("table_priority_gap_tracts"),
       
-      br(), br()
+      br(), br(),
+      
+    h3("Methods in brief"),
+    p(
+      strong("Behaviour classification: "),
+      "Each scooter trip is linked to anonymized road segments. We mark a segment as near transit if it lies within 30 m of any transit stop. ",
+      "Trips are classified as first_mile, last_mile, sub_multi, sub_one, or none based on which ends are near stops and whether the same bus route serves both ends."
     ),
+    p(
+      strong("Hourly averages: "),
+      "For each day, hour, and behaviour type, we count trips and then average across days to get typical daily patterns separately for weekdays and weekends."
+    ),
+    p(
+      strong("Distances to stops: "),
+      "For each trip, we compute the straight-line distance from the centroid of the start segment to the nearest transit stop. ",
+      "These are shown on a log scale because distances span orders of magnitude."
+    ),
+    p(
+      strong("Route leakiness: "),
+      "For each bus route we count scooter trips that could be replaced by a single bus ride (sub_one) and compare them to annual boardings on that route. ",
+      "Leakiness is defined as ",
+      code("leakiness = scooter_substitution_trips / route_boardings"),
+      " and is only reported for routes with at least 20 substitution trips and boardings above the median so low-volume express routes do not dominate."
+    ),
+    p(
+      strong("Tract-level substitution and gap shares: "),
+      "We assign scooter trip starts to census tracts and compute the share of trips in each tract that are sub_one (substitution) or none (gap). ",
+      "These shares are mapped for Minneapolis tracts only."
+    ),
+    p(
+      strong("Equity-focused gap priority: "),
+      "We convert gap share, income, zero-car share, boardings density, and population into deciles and create ",
+      code("gap_priority_score"),
+      " with extra weight on gap share and lower incomes. ",
+      "The highest-scoring tracts are listed in the table and outlined on the gap map."
+    )),
     
     tabPanel(
       "Substitution explorer",
@@ -222,8 +316,13 @@ ui <- fluidPage(
         sidebarPanel(
           h4("Explore scooter trips that duplicate a single bus route"),
           p(
-            "Use this tab to zoom in on a specific route, see where scooters start and end ",
-            "along it, and inspect the underlying trip table (downsampled for performance)."
+            "Use this tab to zoom in on a specific bus route and see scooter trips that ",
+            "start and end near stops on that route. These trips are our best candidates for ",
+            strong("one-route substitutions (sub_one).")
+          ),
+          p(
+            "The map shows a downsampled set of scooter trip start and end points for the selected route. ",
+            "The table lists the underlying scooter trips and their associated route."
           ),
           selectInput(
             "route_select",
@@ -234,11 +333,14 @@ ui <- fluidPage(
         mainPanel(
           leafletOutput("subMap", height = "600px"),
           br(),
+          p(
+            "Each point represents a scooter trip that could plausibly be replaced by this bus route. ",
+            "The table below lists the downsampled trip IDs and route metadata."
+          ),
           h4("Scooter trips on this route (sample)"),
           DTOutput("subTable")
         )
-      )
-    ),
+    )),
     
     tabPanel(
       "Gap explorer",
@@ -246,8 +348,14 @@ ui <- fluidPage(
         sidebarPanel(
           h4("Explore where scooters run far from transit"),
           p(
-            "This tab lets us explore tracts where a large share of scooter trips ",
-            "have no nearby transit stops."
+            "This map shows the share of scooter trips in each tract where neither end is near a transit stop ",
+            "(",
+            code("gap_share = gap_trips / all_trips"),
+            ")."
+          ),
+          p(
+            "A value of 0% means all scooter trips start or end near transit; ",
+            "100% would mean every scooter trip happens beyond walking distance of transit."
           ),
           sliderInput(
             "min_gap_share",
@@ -275,6 +383,14 @@ ui <- fluidPage(
 # ---- Server ----
 server <- function(input, output, session) {
   
+  beh_pal <- c(
+    "none"       = "#1b9e77",
+    "first_mile" = "#d95f02",
+    "last_mile"  = "#7570b3",
+    "sub_multi"  = "#e7298a",
+    "sub_one"    = "#66a61e"
+  )
+  
   observe({
     choices <- same_route_small$route_short_name
     choices <- sort(unique(choices[!is.na(choices)]))
@@ -286,7 +402,7 @@ server <- function(input, output, session) {
            aes(x = behavior_type, y = pct, fill = behavior_type)) +
       geom_col() +
       scale_y_continuous(labels = percent_format(accuracy = 1)) +
-      scale_fill_viridis_d(option = "plasma", end = 0.9) +
+      scale_fill_manual(values = beh_pal) +
       labs(
         title = "Composition of scooter trip types",
         x = "Behavior type",
@@ -303,7 +419,7 @@ server <- function(input, output, session) {
       geom_line(size = 1.1) +
       facet_wrap(~ day_type, ncol = 1) +
       scale_x_continuous(breaks = 0:23) +
-      scale_color_viridis_d(option = "plasma", end = 0.9) +
+      scale_color_manual(values = beh_pal) +
       labs(
         title = "Average hourly scooter trips by behavior type",
         x = "Hour of day",
@@ -321,7 +437,7 @@ server <- function(input, output, session) {
       facet_wrap(~ day_type, ncol = 1) +
       scale_x_continuous(breaks = 0:23) +
       scale_y_continuous(labels = percent_format(accuracy = 1)) +
-      scale_color_viridis_d(option = "plasma", end = 0.9) +
+      scale_color_manual(values = beh_pal) +
       labs(
         title = "Average hourly scooter trip share by behavior type",
         x = "Hour of day",
@@ -333,8 +449,11 @@ server <- function(input, output, session) {
   
   output$plot_dist_box <- renderPlot({
     ggplot(start_points_beh_small,
-           aes(x = behavior_type, y = dist_to_nearest_stop)) +
-      geom_boxplot(outlier.alpha = 0.2, fill = "#3182bd", alpha = 0.7) +
+           aes(x = behavior_type,
+               y = dist_to_nearest_stop,
+               fill = behavior_type)) +
+      geom_boxplot(outlier.alpha = 0.2, alpha = 0.8) +
+      scale_fill_manual(values = beh_pal) +
       scale_y_continuous(
         trans  = "log10",
         breaks = c(10, 30, 100, 300, 1000),
@@ -345,143 +464,183 @@ server <- function(input, output, session) {
         x = "Behavior type",
         y = "Distance (log scale)"
       ) +
-      theme_minimal(base_size = 13)
+      theme_minimal(base_size = 13) +
+      theme(legend.position = "none")
   })
   
   output$plot_leaky_routes <- renderPlot({
     ggplot(top_leaky,
-           aes(x = reorder(route_short_name, leakiness), y = leakiness)) +
-      geom_col(fill = "#1f78b4") +
+           aes(x = reorder(route_short_name, leakiness_raw),
+               y = leakiness_raw)) +
+      geom_col(fill = "#d95f02") +
       coord_flip() +
       scale_y_continuous(labels = percent_format(accuracy = 0.1)) +
       labs(
-        title = "Top 10 'Leaky' Routes",
-        subtitle = "Approximate share of riders choosing scooters over buses",
+        title = "Top 10 'Leaky' routes (busy routes only)",
+        subtitle = "Leakiness = scooter substitution trips / annual bus boardings\nShown only for routes with ≥ 20 substitution trips and boardings above the median.",
         x = "Route short name",
-        y = "Leakiness (Scooter substitutions / Bus boardings)"
+        y = "Leakiness (%)"
       ) +
       theme_minimal(base_size = 13)
   })
   
   output$plot_sub_map <- renderPlot({
+    priority_sub_geoms <- tracts_ll_small %>%
+      dplyr::filter(GEOID %in% priority_sub_tracts$GEOID)
+    
     ggplot() +
       geom_sf(data = tracts_ll_small,
               aes(fill = sub_share), color = NA) +
-      scale_fill_viridis_c(
-        option   = "magma",
-        na.value = "grey90",
-        labels   = percent_format(accuracy = 1),
-        name     = "Substitution share"
+      scale_fill_gradientn(
+        colours = c("#bae4bc", "#0868ac"),
+        limits  = c(0, 1),
+        labels  = percent_format(accuracy = 1),
+        name    = "Substitution share"
+      ) +
+      geom_sf(
+        data = priority_sub_geoms,
+        fill = NA,
+        color = "black",
+        linewidth = 0.6
       ) +
       labs(
-        title = "Where scooters most often duplicate a single bus route"
+        title = "Where scooters most often duplicate a single bus route",
+        subtitle = "Black outlines show the top substitution-priority tracts in the table below"
       ) +
       theme_minimal(base_size = 13) +
       theme(axis.title = element_blank())
   })
   
   output$plot_gap_map <- renderPlot({
+    priority_gap_geoms <- tracts_ll_small %>%
+      dplyr::filter(GEOID %in% priority_gap_tracts$GEOID)
+    
     ggplot() +
       geom_sf(data = tracts_ll_small,
               aes(fill = gap_share), color = NA) +
-      scale_fill_viridis_c(
-        option   = "magma",
-        na.value = "grey90",
-        labels   = percent_format(accuracy = 1),
-        name     = "Gap share"
+      scale_fill_gradientn(
+        colours = c("#bae4bc", "#0868ac"),
+        limits  = c(0, 1),
+        labels  = percent_format(accuracy = 1),
+        name    = "Gap share"
+      ) +
+      geom_sf(
+        data = priority_gap_geoms,
+        fill = NA,
+        color = "black",
+        linewidth = 0.6
       ) +
       labs(
-        title = "Where scooters operate beyond walking distance of transit"
+        title = "Where scooters operate beyond walking distance of transit",
+        subtitle = "Black outlines show the top gap-priority tracts in the table below"
       ) +
       theme_minimal(base_size = 13) +
       theme(axis.title = element_blank())
   })
   
   output$table_priority_sub_tracts <- renderDT({
-    priority_sub_tracts |>
+    priority_sub_tracts %>%
       mutate(
         sub_share = percent(sub_share, accuracy = 0.1)
-      ) |>
+      ) %>%
       datatable(options = list(pageLength = 5))
   })
   
   output$table_priority_gap_tracts <- renderDT({
-    priority_gap_tracts |>
+    priority_gap_tracts %>%
       mutate(
         gap_share      = percent(gap_share,      accuracy = 0.1),
         zero_car_share = percent(zero_car_share, accuracy = 0.1)
-      ) |>
+      ) %>%
       datatable(options = list(pageLength = 5))
   })
   
   output$subMap <- renderLeaflet({
     req(input$route_select)
     
-    selected <- same_route_small |>
+    selected <- same_route_small %>%
       filter(route_short_name == input$route_select)
     
     ids <- unique(selected$trip_id)
     
-    starts_filtered <- start_points_map_small |>
+    starts_filtered <- start_points_map_small %>%
       filter(trip_id %in% ids)
     
-    ends_filtered <- end_points_map_small |>
+    ends_filtered <- end_points_map_small %>%
       filter(trip_id %in% ids)
     
-    leaflet() |>
-      addProviderTiles(providers$OpenStreetMap) |>
+    leaflet() %>%
+      addProviderTiles(providers$OpenStreetMap) %>%
       addCircleMarkers(
         data        = starts_filtered,
-        color       = "darkblue",
+        color       = "#7570b3",
         radius      = 3,
         opacity     = 0.8,
         fillOpacity = 0.8,
         popup       = ~paste("Trip ID:", trip_id)
-      ) |>
+      ) %>%
       addCircleMarkers(
         data        = ends_filtered,
-        color       = "violet",
+        color       = "#d95f02",
         radius      = 3,
         opacity     = 0.8,
         fillOpacity = 0.8,
         popup       = ~paste("Trip ID:", trip_id)
+      ) %>%
+      addLegend(
+        position = "bottomright",
+        colors   = c("#7570b3", "#d95f02"),
+        labels   = c("Scooter trip start", "Scooter trip end"),
+        title    = "Scooter points",
+        opacity  = 1
       )
   })
   
   output$subTable <- renderDT({
     req(input$route_select)
-    same_route_small |>
-      filter(route_short_name == input$route_select) |>
-      select(trip_id, route_id, route_short_name, route_long_name) |>
-      distinct() |>
+    same_route_small %>%
+      filter(route_short_name == input$route_select) %>%
+      select(trip_id, route_id, route_short_name, route_long_name) %>%
+      distinct() %>%
       datatable(options = list(pageLength = 10))
   })
   
   output$gapMap <- renderLeaflet({
     pal <- colorNumeric(
-      palette = "magma",
-      domain  = tracts_ll_small$gap_share,
+      palette = c("#fdcc8a", "#b30000"),
+      domain  = c(0, 1),
       na.color = "transparent"
     )
     
-    tracts_filtered <- tracts_ll_small |>
-      filter(gap_share >= input$min_gap_share)
+    tracts_filtered <- tracts_ll_small %>%
+      dplyr::filter(gap_share >= input$min_gap_share)
     
-    leaflet() |>
-      addProviderTiles(providers$OpenStreetMap) |>
+    priority_gap_geoms_leaf <- tracts_filtered %>%
+      dplyr::filter(GEOID %in% priority_gap_tracts$GEOID)
+    
+    leaflet() %>%
+      addProviderTiles(providers$OpenStreetMap) %>%
       addPolygons(
         data        = tracts_filtered,
         fillColor   = ~pal(gap_share),
         fillOpacity = 0.7,
         color       = NA
-      ) |>
+      ) %>%
+      addPolygons(
+        data        = priority_gap_geoms_leaf,
+        fillOpacity = 0,
+        color       = "black",
+        weight      = 2
+      ) %>%
       addLegend(
         pal    = pal,
-        values = tracts_ll_small$gap_share,
-        title  = "Gap trip share"
+        values = c(0, 1),
+        labFormat = labelFormat(transform = function(x) 100 * x, suffix = "%"),
+        title  = "Gap trip share\n0% = none of the trips are gaps\n100% = all trips are gaps"
       )
   })
   
 }
 
 shinyApp(ui, server)
+
