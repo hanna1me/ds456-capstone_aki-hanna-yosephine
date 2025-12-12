@@ -17,11 +17,19 @@ editor: visual
 
 **Motivation**
 
-Our project stemmed from our shared interest in spacial data analysis, one of its specific trait being its versatility. We agreed upon transportation, and more specifically public transit and micro mobility.
+Our project stemmed from our shared interest in spacial data analysis, one of its specific trait being its versatility. After trying different datasets of spacial data, we realized quite quickly that trying to do international data would be quite difficult as different countries have different systems of storing data and that data would more likely be behind a paywall. We narrowed our scope to minneapolis due to its openess of its transportation data. While looking though that data we discovered that they tracked the usage of e-bike and e-scooters such as lime which is relatively new to the minneapolis transportation. Comparing a new form of transportation to the usage of the older more structured form could bring us more insight into the efficacy of the lime scooter.
 
 With the rise of urbanization, cities are facing increasing challenges in managing transportation systems efficiently. Redundant routes can lead to wasted resources, increased traffic congestion, and higher emissions. By identifying and optimizing these routes, we can improve the overall efficiency of public transit and micro mobility options in Minneapolis, making it easier for residents to navigate the city while reducing environmental impact.
 
 ## Data
+
+For this project we used data from both sources that we found online and sources that we got from in-person meetings.
+
+Our first source we got came from the Open Minneapolis website. This website shares all the city data form Minneapolis to the general public. This website has everything from bus routes to 3-11 calls to an e-scooter dashboard. The problem with this data that it is not very good. It has the data of the of the beginning point... This would have been a dead end if we did not contact Max Gonzalez who was able to help us query better data. We were able to get all the data in 2025 on e-scooter in regards to their start point, end point, ride duration, ride distances, and ride times.
+
+The second data source that we are using is the GTFS data. GTFS (or General Transit Feed Specification) is an open source documentation platform for international transit schedules and routes. Although this has good data on all the transit(stop locations, schedules, routes, etc) they were all in separate text files that needed to be cleaned and joined.
+
+The 3rd data source we are using is the google API. this API allows us to use google maps data to see the most efficient routes to go to any place on the map separated by the mode of transportation (bikes, public transit, cars). We can use this API to track if the usage of micromobility is acatually a better form of transit than any of the other public transit method.
 
 ## Result
 
@@ -34,6 +42,8 @@ A notable feature of the map is the steep gradient in activity around major lake
 Trip density also appears to align with major transit lines and corridors. The presence of consistently moderate-to-high density cells along Hennepin Avenue, University Avenue, Lake Street, and Portland–Park suggests that micromobility trips function as a first-mile/last-mile link to public transit. This is consistent with known behavior in cities where shared bikes and scooters support multimodal movement patterns. Outlying residential neighborhoods such as Nokomis, Camden, or parts of Northeast show sparse usage, reflecting lower trip demand, reduced station/service availability, or longer trip distances less suited for micromobility.
 
 There are also patches of “missing” data representing grid cells with insufficient trip volume or no available service. These occur primarily near the edges of the city boundary or in low-density residential zones. Their presence helps confirm that the observed hotspots are not artifacts but are genuinely supported by service distribution and user behavior.
+
+Interestingly enough the e-scooter usage seems to be filling in more gaps in the transportation than we expected. over 60% of e-scooter users are not overlapping inside the bus routes. Infact the majority of trips do not have any overlap with bus routes
 
 Overall, the density map highlights a clear spatial hierarchy of micromobility use: highest in mixed-use urban centers, moderate in surrounding commercial corridors, and lowest in dispersed residential areas. These findings support the idea that micromobility is most valuable in dense, walkable environments where short trips are optimal and transit access is high.
 
