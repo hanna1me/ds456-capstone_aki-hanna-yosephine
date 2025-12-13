@@ -43,7 +43,9 @@ Trip density also appears to align with major transit lines and corridors. The p
 
 There are also patches of “missing” data representing grid cells with insufficient trip volume or no available service. These occur primarily near the edges of the city boundary or in low-density residential zones. Their presence helps confirm that the observed hotspots are not artifacts but are genuinely supported by service distribution and user behavior.
 
-Interestingly enough the e-scooter usage seems to be filling in more gaps in the transportation than we expected. over 60% of e-scooter users are not overlapping inside the bus routes. Infact the majority of trips do not have any overlap with bus routes
+Interestingly enough the e-scooter usage seems to be filling in more gaps in the transportation than we expected. over 60% of e-scooter users are not overlapping inside the bus routes. In fact the majority of trips do not have any overlap with bus stops what so ever. We expected that most e-scooter rides would be utilizes as the first or last mile of a trip; meaning that e-scooters would be used to get to bus stops instead of replace them. ...
+
+In terms of efficency of travel, the e-scooters have proven themselves to be quite inefficient. The e-scooters average time per A253647They seem to be doubling the average time of bikes and to be slightly above transit usage.
 
 Overall, the density map highlights a clear spatial hierarchy of micromobility use: highest in mixed-use urban centers, moderate in surrounding commercial corridors, and lowest in dispersed residential areas. These findings support the idea that micromobility is most valuable in dense, walkable environments where short trips are optimal and transit access is high.
 
