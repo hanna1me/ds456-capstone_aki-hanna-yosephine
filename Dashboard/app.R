@@ -7,6 +7,8 @@ library(DT)
 library(leaflet)
 library(bslib)
 library(sf)
+library(httr)
+library(jsonlite)
 
 # ---- Load precomputed, small objects ----
 
@@ -25,6 +27,97 @@ same_route_small       <- readRDS("data/app/app_same_route_small.rds")
 start_points_map_small <- readRDS("data/app/app_start_points_map_small.rds")
 end_points_map_small   <- readRDS("data/app/app_end_points_map_small.rds")
 stops_ll               <- readRDS("data/app/app_stops_ll.rds")
+stops_ll <- stops_ll %>%
+  mutate(
+    stop_lon = sf::st_coordinates(geometry)[, 1],
+    stop_lat = sf::st_coordinates(geometry)[, 2]
+  )
+
+time_by_behavior <- readRDS("data/app/app_time_by_behavior.rds")
+time_diff_dist   <- readRDS("data/app/app_time_diff_dist.rds")
+
+# ---- small helper for NULL-safe values ----
+`%||%` <- function(x, y) if (is.null(x)) y else x
+
+# ---- Google Directions helpers ----
+google_directions_one_mode <- function(origin_lat, origin_lon,
+                                       dest_lat, dest_lon,
+                                       mode = c("bicycling", "transit")) {
+  mode <- match.arg(mode)
+  key  <- Sys.getenv("GOOGLE_MAPS_KEY")
+  
+  if (key == "") {
+    return(
+      tibble::tibble(
+        mode         = mode,
+        duration_min = NA_real_,
+        distance_km  = NA_real_,
+        summary      = "GOOGLE_MAPS_KEY is empty – set Sys.setenv(GOOGLE_MAPS_KEY = '...')"
+      )
+    )
+  }
+  
+  # guard against NA coords
+  if (any(is.na(c(origin_lat, origin_lon, dest_lat, dest_lon)))) {
+    return(
+      tibble::tibble(
+        mode         = mode,
+        duration_min = NA_real_,
+        distance_km  = NA_real_,
+        summary      = "Origin or destination coordinates are NA"
+      )
+    )
+  }
+  
+  base_url <- "https://maps.googleapis.com/maps/api/directions/json"
+  
+  res <- httr::GET(
+    url = base_url,
+    query = list(
+      origin      = paste(origin_lat, origin_lon, sep = ","),
+      destination = paste(dest_lat,  dest_lon,  sep = ","),
+      mode        = mode,
+      key         = key
+    )
+  )
+  
+  x <- httr::content(res, as = "parsed", type = "application/json")
+  api_status <- x$status %||% httr::http_status(res)$reason
+  api_error  <- x$error_message %||% ""
+  
+  if (is.null(x$status) || x$status != "OK") {
+    # Return a row with the error explanation instead of stopping
+    return(
+      tibble::tibble(
+        mode         = mode,
+        duration_min = NA_real_,
+        distance_km  = NA_real_,
+        summary      = paste("status:", api_status, "| error:", api_error)
+      )
+    )
+  }
+  
+  leg <- x$routes[[1]]$legs[[1]]
+  
+  duration_min  <- leg$duration$value  / 60   # seconds -> minutes
+  distance_km   <- leg$distance$value / 1000  # meters  -> km
+  route_summary <- x$routes[[1]]$summary %||% NA_character_
+  
+  tibble::tibble(
+    mode         = mode,
+    duration_min = duration_min,
+    distance_km  = distance_km,
+    summary      = route_summary
+  )
+}
+
+get_google_trip_times <- function(origin_lat, origin_lon,
+                                  dest_lat, dest_lon) {
+  dplyr::bind_rows(
+    google_directions_one_mode(origin_lat, origin_lon, dest_lat, dest_lon, mode = "bicycling"),
+    google_directions_one_mode(origin_lat, origin_lon, dest_lat, dest_lon, mode = "transit")
+  )
+}
 
 # ---- Defensive: ensure leaflet layers are POINT geometries ----
 
@@ -247,6 +340,33 @@ ui <- fluidPage(
       p(
         "Substitution priority favours tracts where many riders are choosing scooters instead of a bus AND large numbers of riders are present:"
       ),
+      
+      br(), br(),
+      br(), br(),
+      
+      h2("7. How long do scooter trips take compared to transit?"),
+      p(
+        "Using a pilot sample of trips, we used the Google Directions API to estimate door-to-door travel times ",
+        "for both scooters and transit between the same origin and destination."
+      ),
+      
+      h4("Median travel time by behaviour type"),
+      plotOutput("plot_time_by_behavior", height = "380px"),
+      
+      p(
+        strong("How to read this: "),
+        "higher bars indicate longer median travel times. ",
+        "The difference between the scooter and transit bars shows where scooters are mainly saving time ",
+        "versus where they behave more like a convenience or comfort substitution."
+      ),
+      
+      h4("Distribution of time differences (transit - scooter)"),
+      plotOutput("plot_time_diff_dist", height = "380px"),
+      p(
+        "Values above 0 mean transit is slower than scooters for that trip; ",
+        "values below 0 mean transit is faster."
+      ),
+      
       tags$ul(
         tags$li("High decile of substitution share (sub_share)"),
         tags$li("High decile of population"),
@@ -538,6 +658,32 @@ server <- function(input, output, session) {
       theme(axis.title = element_blank())
   })
   
+  output$plot_time_by_behavior <- renderPlot({
+    ggplot(time_by_behavior,
+           aes(x = behavior_type)) +
+      geom_col(aes(y = median_scooter, fill = "Scooter"), position = "dodge") +
+      geom_col(aes(y = median_transit, fill = "Transit"), position = "dodge") +
+      scale_y_continuous("Median time (minutes)") +
+      scale_fill_viridis_d(name = "Mode", option = "plasma", end = 0.9) +
+      labs(title = "Median travel time by behaviour type (pilot sample)") +
+      theme_minimal(base_size = 13) +
+      theme(axis.title.x = element_blank())
+  })
+  
+  output$plot_time_diff_dist <- renderPlot({
+    ggplot(time_diff_dist,
+           aes(x = diff_min, fill = behavior_type)) +
+      geom_histogram(bins = 30, alpha = 0.7, position = "identity") +
+      geom_vline(xintercept = 0, linetype = "dashed") +
+      scale_fill_viridis_d(option = "plasma", end = 0.95, name = "Behaviour") +
+      labs(
+        x = "Transit time − scooter time (minutes)",
+        y = "Trips",
+        title = "Where do scooters save time versus transit?"
+      ) +
+      theme_minimal(base_size = 13)
+  })
+  
   output$table_priority_sub_tracts <- renderDT({
     priority_sub_tracts %>%
       mutate(
@@ -638,6 +784,38 @@ server <- function(input, output, session) {
         labFormat = labelFormat(transform = function(x) 100 * x, suffix = "%"),
         title  = "Gap trip share\n0% = none of the trips are gaps\n100% = all trips are gaps"
       )
+  })
+  
+  # ---- Travel-time sandbox server logic ----
+  sandbox_origin_coords <- reactive({
+    req(input$sandbox_origin)
+    stops_ll %>%
+      filter(stop_name == input$sandbox_origin) %>%
+      slice(1)
+  })
+  
+  sandbox_dest_coords <- reactive({
+    req(input$sandbox_dest)
+    stops_ll %>%
+      filter(stop_name == input$sandbox_dest) %>%
+      slice(1)
+  })
+  
+  sandbox_times <- eventReactive(input$run_sandbox, {
+    o <- sandbox_origin_coords()
+    d <- sandbox_dest_coords()
+    
+    get_google_trip_times(
+      origin_lat = o$stop_lat,
+      origin_lon = o$stop_lon,
+      dest_lat   = d$stop_lat,
+      dest_lon   = d$stop_lon
+    )
+  })
+  
+  output$sandbox_result <- renderPrint({
+    req(sandbox_times())
+    sandbox_times()
   })
   
 }
