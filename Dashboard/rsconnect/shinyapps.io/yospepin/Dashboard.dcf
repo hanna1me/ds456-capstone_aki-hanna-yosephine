@@ -5,7 +5,7 @@ account: yospepin
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 16273478
-bundleId: 11294947
+bundleId: 11312078
 url: https://yospepin.shinyapps.io/Dashboard/
 version: 1
 asMultiple: FALSE
