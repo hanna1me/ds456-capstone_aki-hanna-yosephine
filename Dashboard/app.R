@@ -69,6 +69,14 @@ google_directions_one_mode <- function(origin_lat, origin_lon,
     )
   }
   
+  # guard against NULL coords
+  if (any(vapply(list(origin_lat, origin_lon, dest_lat, dest_lon), is.null, logical(1)))) {
+    return(tibble::tibble(
+      mode = mode, duration_min = NA_real_, distance_km = NA_real_,
+      summary = "Origin/destination coords are NULL (stop lookup failed)"
+    ))
+  }
+  
   base_url <- "https://maps.googleapis.com/maps/api/directions/json"
   
   res <- httr::GET(
@@ -495,6 +503,23 @@ ui <- fluidPage(
           )
         )
       )
+    ),
+    
+    tabPanel(
+      "Travel-time sandbox",
+      sidebarLayout(
+        sidebarPanel(
+          h4("Compare scooter vs transit time between two stops"),
+          selectInput("sandbox_origin", "Origin stop:", choices = NULL),
+          selectInput("sandbox_dest", "Destination stop:", choices = NULL),
+          actionButton("run_sandbox", "Run Google Directions"),
+          br(), br(),
+          verbatimTextOutput("sandbox_status")
+        ),
+        mainPanel(
+          tableOutput("sandbox_result_tbl")
+        )
+      )
     )
     
   )
@@ -786,36 +811,72 @@ server <- function(input, output, session) {
       )
   })
   
-  # ---- Travel-time sandbox server logic ----
-  sandbox_origin_coords <- reactive({
-    req(input$sandbox_origin)
-    stops_ll %>%
-      filter(stop_name == input$sandbox_origin) %>%
-      slice(1)
+  # ---- Travel-time sandbox server logic (SAFE) ----
+  observe({
+    req(stops_ll)
+    stop_choices <- sort(unique(stops_ll$stop_name))
+    updateSelectInput(session, "sandbox_origin", choices = stop_choices)
+    updateSelectInput(session, "sandbox_dest",   choices = stop_choices, selected = stop_choices[2])
   })
   
-  sandbox_dest_coords <- reactive({
-    req(input$sandbox_dest)
+  get_stop_row <- function(stop_name) {
     stops_ll %>%
-      filter(stop_name == input$sandbox_dest) %>%
+      filter(stop_name == .env$stop_name) %>%
       slice(1)
-  })
+  }
   
   sandbox_times <- eventReactive(input$run_sandbox, {
-    o <- sandbox_origin_coords()
-    d <- sandbox_dest_coords()
+    req(input$sandbox_origin, input$sandbox_dest)
     
-    get_google_trip_times(
-      origin_lat = o$stop_lat,
-      origin_lon = o$stop_lon,
-      dest_lat   = d$stop_lat,
-      dest_lon   = d$stop_lon
+    o <- get_stop_row(input$sandbox_origin)
+    d <- get_stop_row(input$sandbox_dest)
+    
+    validate(
+      need(nrow(o) == 1, "Origin stop not found (or not unique). Pick a different origin."),
+      need(nrow(d) == 1, "Destination stop not found (or not unique). Pick a different destination.")
     )
+    
+    validate(
+      need(is.finite(o$stop_lat) && is.finite(o$stop_lon), "Origin stop has invalid coordinates."),
+      need(is.finite(d$stop_lat) && is.finite(d$stop_lon), "Destination stop has invalid coordinates.")
+    )
+    
+    out <- tryCatch(
+      get_google_trip_times(
+        origin_lat = o$stop_lat,
+        origin_lon = o$stop_lon,
+        dest_lat   = d$stop_lat,
+        dest_lon   = d$stop_lon
+      ),
+      error = function(e) {
+        tibble::tibble(
+          mode = c("bicycling", "transit"),
+          duration_min = NA_real_,
+          distance_km = NA_real_,
+          summary = paste("R error:", conditionMessage(e))
+        )
+      }
+    )
+    
+    out
+  }, ignoreInit = TRUE)
+  
+  output$sandbox_status <- renderText({
+    if (is.null(input$run_sandbox) || input$run_sandbox == 0) {
+      return("Pick an origin + destination, then click Run.")
+    }
+    if (is.null(sandbox_times())) return("Running...")
+    x <- sandbox_times()
+    paste(unique(x$summary), collapse = "\n")
   })
   
-  output$sandbox_result <- renderPrint({
+  output$sandbox_result_tbl <- renderTable({
     req(sandbox_times())
-    sandbox_times()
+    sandbox_times() %>%
+      dplyr::mutate(
+        duration_min = round(duration_min, 1),
+        distance_km  = round(distance_km, 2)
+      )
   })
   
 }
