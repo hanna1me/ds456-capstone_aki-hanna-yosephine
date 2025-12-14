@@ -19,10 +19,11 @@ boardings_sf <- readRDS("../Dashboard/data/stop_boardings_sf.rds")
 stop_times <- readRDS("../Dashboard/data/stop_times.rds")
 trips_gtfs <- readRDS("../Dashboard/data/trips_gtfs.rds")
 routes_gtfs <- readRDS("../Dashboard/data/routes_gtfs.rds")
-
+google_results <- readRDS("../Data/google_results.rds")
+google_results_wide <- readRDS("../Data/google_results_wide.rds")
+google_results_long <- readRDS("../Data/google_results_long.rds")
 
 if (!dir.exists("data/app")) dir.create("data/app")
-
 
 start_segments   <- st_as_sf(start_segments)   %>%  st_transform(crs_proj)
 end_segments     <- st_as_sf(end_segments)     %>%  st_transform(crs_proj)
@@ -337,6 +338,43 @@ start_points_map_small <- start_points_ll %>%
 
 end_points_map_small <- end_points_ll %>%
   dplyr::filter(trip_id %in% ids_keep)
+
+# ---- Google API travel-time summaries ----
+
+google_wide <- google_results_long %>%
+  filter(mode %in% c("scooter", "transit")) %>%
+  select(trip_id, mode, duration_min) %>%
+  tidyr::pivot_wider(
+    names_from = mode,
+    values_from = duration_min,
+    names_prefix = "time_"
+  )
+
+trips_with_times <- trips_with_behavior |>
+  left_join(google_wide, by = "trip_id")
+
+time_by_behavior <- trips_with_times |>
+  group_by(behavior_type) |>
+  summarise(
+    n_with_times   = sum(!is.na(time_scooter) & !is.na(time_transit)),
+    median_scooter = median(time_scooter, na.rm = TRUE),
+    median_transit = median(time_transit, na.rm = TRUE),
+    median_diff    = median(time_transit - time_scooter, na.rm = TRUE),
+    .groups        = "drop"
+  )
+
+saveRDS(time_by_behavior, "../Dashboard/data/app/app_time_by_behavior.rds")
+
+time_diff_dist <- trips_with_times |>
+  filter(!is.na(time_scooter), !is.na(time_transit)) |>
+  mutate(
+    diff_min = time_transit - time_scooter, # + = transit slower
+  ) |>
+  select(trip_id, behavior_type, diff_min)
+
+saveRDS(time_diff_dist, "../Dashboard/data/app/app_time_diff_dist.rds")
+
+
 
 saveRDS(same_route_small,       "data/app/app_same_route_small.rds")
 saveRDS(start_points_map_small, "data/app/app_start_points_map_small.rds")
