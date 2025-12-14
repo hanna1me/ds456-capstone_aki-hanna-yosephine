@@ -9,16 +9,16 @@ library(bslib)
 library(sf)
 library(httr)
 library(jsonlite)
+library(tidyr)
 
 # ---- Load precomputed, small objects ----
-
 behavior_counts        <- readRDS("data/app/app_behavior_counts.rds")
 hourly_normalized      <- readRDS("data/app/app_hourly_normalized.rds")
 hourly_share           <- readRDS("data/app/app_hourly_share.rds")
 start_points_beh_small <- readRDS("data/app/start_points_beh_small.rds")
 
-top_leaky         <- readRDS("data/app/app_top_leaky.rds")
-priority_routes   <- readRDS("data/app/app_priority_routes.rds")
+top_leaky            <- readRDS("data/app/app_top_leaky.rds")
+priority_routes      <- readRDS("data/app/app_priority_routes.rds")
 priority_gap_tracts  <- readRDS("data/app/app_priority_gap_tracts.rds")
 priority_sub_tracts  <- readRDS("data/app/app_priority_sub_tracts.rds")
 tracts_ll_small      <- readRDS("data/app/app_tracts_ll_small.rds")
@@ -26,7 +26,8 @@ tracts_ll_small      <- readRDS("data/app/app_tracts_ll_small.rds")
 same_route_small       <- readRDS("data/app/app_same_route_small.rds")
 start_points_map_small <- readRDS("data/app/app_start_points_map_small.rds")
 end_points_map_small   <- readRDS("data/app/app_end_points_map_small.rds")
-stops_ll               <- readRDS("data/app/app_stops_ll.rds")
+
+stops_ll <- readRDS("data/app/app_stops_ll.rds")
 stops_ll <- stops_ll %>%
   mutate(
     stop_lon = sf::st_coordinates(geometry)[, 1],
@@ -35,6 +36,11 @@ stops_ll <- stops_ll %>%
 
 time_by_behavior <- readRDS("data/app/app_time_by_behavior.rds")
 time_diff_dist   <- readRDS("data/app/app_time_diff_dist.rds")
+
+# Precomputed travel-time summary tables
+summary_stats  <- readRDS("data/app/summary_stats.rds")
+fastest_counts <- readRDS("data/app/fastest_mode_counts.rds")
+final_table    <- readRDS("data/app/final_comparison_table.rds")
 
 # ---- small helper for NULL-safe values ----
 `%||%` <- function(x, y) if (is.null(x)) y else x
@@ -94,7 +100,6 @@ google_directions_one_mode <- function(origin_lat, origin_lon,
   api_error  <- x$error_message %||% ""
   
   if (is.null(x$status) || x$status != "OK") {
-    # Return a row with the error explanation instead of stopping
     return(
       tibble::tibble(
         mode         = mode,
@@ -128,15 +133,12 @@ get_google_trip_times <- function(origin_lat, origin_lon,
 }
 
 # ---- Defensive: ensure leaflet layers are POINT geometries ----
-
 if (inherits(sf::st_geometry(start_points_map_small), "sfc_LINESTRING")) {
   start_points_map_small <- sf::st_centroid(start_points_map_small)
 }
 if (inherits(sf::st_geometry(end_points_map_small), "sfc_LINESTRING")) {
   end_points_map_small <- sf::st_centroid(end_points_map_small)
 }
-
-# tracts_ll_small should be POLYGON / MULTIPOLYGON; no change needed for ggplot/leaflet
 
 # ---- UI ----
 ui <- fluidPage(
@@ -162,71 +164,29 @@ ui <- fluidPage(
       ),
       p(
         strong("Key assumptions about behaviour types: "),
-        "Because scooter locations are anonymized to street segments (centerlines), we infer behaviour purely from segment proximity to transit stops (that is, whether or not there are bus stops along that segment of transits).",
+        "Because scooter locations are anonymized to street segments (centerlines), we infer behaviour purely from segment proximity to transit stops."
       ),
       p(
         "These classifications are an approximation. They do not prove that riders actually boarded transit; ",
-        "they show where scooters are ",
-        strong("able"),
-        " to act as access or substitutes based on network geometry."
+        "they show where scooters are ", strong("able"), " to act as access or substitutes based on network geometry."
       ),
+      
       h2("1. How are scooters being used overall?"),
       p(
         "We classify each scooter trip into one of five behaviour types based on whether the ",
         "road segment where it starts or ends is within 30 meters of a transit stop. ",
         "Because operators provide only anonymized segments (not precise GPS points) the analysis ",
-        "uses buffered road centerlines. Proximity reflects the segment’s geometry, ",
-        "not the rider's exact walking distance."
+        "uses buffered road centerlines."
       ),
       p("Behavioural categories reflect how scooters interact with transit:"),
       tags$ul(
-        tags$li(
-          strong("none: "),
-          "neither the start nor end segment is within 30 m of a transit stop. ",
-          "We interpret these as trips beyond normal walking distance of the transit network (access gaps)."
-        ),
-        tags$li(
-          strong("first_mile: "),
-          "the scooter trip ",
-          strong("ends"),
-          " within 30 m of a transit stop; we assume riders are heading ",
-          strong("into"),
-          " the transit network."
-        ),
-        tags$li(
-          strong("last_mile: "),
-          "the scooter trip ",
-          strong("starts"),
-          " within 30 m of a transit stop; we assume riders are ",
-          strong("continuing a trip after leaving"),
-          " the transit network."
-        ),
-        tags$li(
-          strong("sub_multi: "),
-          "both ends are near transit stops, but connected by ",
-          strong("multiple transit routes or transfers"),
-          ". Scooters may be replacing a more complex transit journey."
-        ),
-        tags$li(
-          strong("sub_one: "),
-          "both ends are near transit stops served by the same bus route; ",
-          "the scooter trip could reasonably be replaced by a ",
-          strong("single bus ride"),
-          "."
-        )
+        tags$li(strong("none: "), "neither end is within 30 m of a transit stop (access gaps)."),
+        tags$li(strong("first_mile: "), "trip ends near a stop (heading into transit)."),
+        tags$li(strong("last_mile: "), "trip starts near a stop (continuing after transit)."),
+        tags$li(strong("sub_multi: "), "both ends near stops, but requires transfers (possible transit replacement)."),
+        tags$li(strong("sub_one: "), "both ends near stops served by the same route (single-ride replacement candidate).")
       ),
-      p("The bar chart shows what share of scooter trips fall into each category."),
       plotOutput("plot_behavior_comp", height = "350px"),
-      p(
-        strong("How to read this: "),
-        "bars add to 100%. Values of ",
-        strong("sub_one"),
-        " and ",
-        strong("sub_multi"),
-        " indicate scooters replacing what could be transit trips, while a high ",
-        strong("none"),
-        " bar suggests scooters filling genuine service gaps."
-      ),
       
       br(), br(),
       
@@ -235,54 +195,19 @@ ui <- fluidPage(
         "Scooter demand follows predictable time-of-day rhythms. To compare behaviours fairly, ",
         "the charts show average hourly values across all days, separately for weekdays and weekends."
       ),
-      
       h4("Average hourly scooter trips by behavior type"),
       plotOutput("plot_hourly_trips", height = "480px"),
-      p(
-        strong("Key takeaway – volumes: "),
-        "during the peak afternoon hours, weekday trips show both ",
-        strong("none"),
-        " and ",
-        strong("last_mile"),
-        " as the two dominant lines. This suggests riders are mostly using scooters to fill transit gaps ",
-        "and to commute from the transit network to another destination (often home). ",
-        "There is a notable ",
-        strong("first_mile"),
-        " peak around 8AM, aligning with work commutes from home into the transit network. ",
-        "On weekends, a visible bump around 1AM reflects post-night-out trips, while an early evening rise ",
-        "around 6–7PM suggests leisure-oriented travel."
-      ),
-      
       h4("Average hourly scooter trip share by behavior type"),
       plotOutput("plot_hourly_share", height = "480px"),
-      p(
-        strong("Key takeaway – shares: "),
-        "around 6AM, ",
-        strong("first-mile"),
-        " temporarily becomes dominant on both weekdays and weekends—suggesting scooters are used to reach transit ",
-        "at the start of morning commutes. In the weekday afternoon, ",
-        strong("last-mile"),
-        " overtakes as riders return home from the transit network. ",
-        "The relative positions of the lines remain fairly stable, indicating that while total volumes change dramatically, ",
-        "the proportional mix of behaviours is surprisingly consistent throughout the day."
-      ),
       
       br(), br(),
       
       h2("3. How close are scooters to transit stops? (Limitations apply)"),
       p(
-        "Distances here are from the centroid of the anonymized street segment to the nearest transit stop. ",
-        "Because we buffer and classify segments within 30m of stops to capture all stop locations along a street, ",
-        "the boxplot reflects those thresholds: many substitution and access trips cluster near the lower end. ",
-        "On long residential blocks, a 300m measured distance may still correspond to a rider who was much closer to the stop."
+        "Distances are from the centroid of the anonymized street segment to the nearest transit stop. ",
+        "Because segments are buffered and classified within 30m, measured distance is a proxy rather than an exact walking distance."
       ),
       plotOutput("plot_dist_box", height = "360px"),
-      p(
-        strong("Interpretation: "),
-        "behaviours tightly clustered around shorter distances are more transit-integrated. ",
-        strong("Substitution trips (sub_one / sub_multi)"),
-        " being closer to stops reinforces that they represent competition with transit rather than simple access."
-      ),
       
       br(), br(),
       
@@ -290,36 +215,13 @@ ui <- fluidPage(
       p(
         "We estimate which bus routes may be losing riders to scooters using ",
         code("leakiness = scooter_substitutions / route_boardings"),
-        ". High leakiness does not necessarily mean poor performance, but it highlights corridors where ",
-        "scooters are acting as substitutes rather than connectors."
-      ),
-      p(
-        "For example, if a route has 3,000 annual bus boardings and we observe 300 scooter trips ",
-        "that start and end near stops on that route, its leakiness is ",
-        code("300 / 3,000 = 0.10"),
-        ", or ",
-        strong("10%"),
-        ". Very low-boarded routes are excluded here so that these ratios remain interpretable."
-      ),
-      p(
-        strong("Data disclaimer: "),
-        "the boarding/alighting dataset may not include every stop or route in Minneapolis. ",
-        "Leakiness is directional—useful for identifying candidates for further evaluation, ",
-        "not for estimating exact revenue loss."
+        ". High leakiness highlights corridors where scooters may substitute for transit."
       ),
       plotOutput("plot_leaky_routes", height = "360px"),
-      p(
-        strong("Takeaway: "),
-        "these routes represent low-cost opportunities to retain riders through improvements such as ",
-        "stop amenities, signal priority, pricing alignment, or integrated micromobility at key stops."
-      ),
       
       br(), br(),
       
       h2("5. Where in the city are substitutions and gaps concentrated?"),
-      p(
-        "Using precomputed tract-level statistics, we map two outcomes:"
-      ),
       tags$ul(
         tags$li(strong("Substitution share:"), " proportion of trips that could be replaced by one bus route (sub_one)."),
         tags$li(strong("Gap share:"), " proportion of trips where neither end is near a stop (none).")
@@ -328,163 +230,96 @@ ui <- fluidPage(
       plotOutput("plot_sub_map", height = "420px"),
       h4("Where scooters operate beyond walking distance of transit"),
       plotOutput("plot_gap_map", height = "420px"),
-      p(
-        strong("Reading the maps: "),
-        "bright areas show neighbourhoods where scooters either compete with or meaningfully ",
-        "compensate for transit. Darker areas reflect lower scooter activity or behaviour closer to ",
-        "the city average."
-      ),
       
       br(), br(),
       
       h2("6. Who is most affected? Equity-focused priority scores"),
-      p(
-        "To move from patterns to action, we use precomputed ",
-        strong("priority scores"),
-        " that highlight neighbourhoods where interventions could have the greatest impact."
-      ),
-      
       h4("Neighbourhoods where scooters are replacing transit for many riders"),
-      p(
-        "Substitution priority favours tracts where many riders are choosing scooters instead of a bus AND large numbers of riders are present:"
-      ),
+      p("Substitution priority favours tracts where many riders choose scooters instead of a bus and where many riders are present."),
+      DTOutput("table_priority_sub_tracts"),
+      br(),
       
-      br(), br(),
+      h4("Neighbourhoods where scooters fill serious access gaps (low income + low car ownership)"),
+      DTOutput("table_priority_gap_tracts"),
+      
       br(), br(),
       
       h2("7. How long do scooter trips take compared to transit?"),
       p(
         "Using a pilot sample of trips, we used the Google Directions API to estimate door-to-door travel times ",
-        "for both scooters and transit between the same origin and destination."
+        "for both biking and transit between the same origin and destination."
       ),
-      
-      h4("Median travel time by behaviour type"),
-      plotOutput("plot_time_by_behavior", height = "380px"),
-      
-      p(
-        strong("How to read this: "),
-        "higher bars indicate longer median travel times. ",
-        "The difference between the scooter and transit bars shows where scooters are mainly saving time ",
-        "versus where they behave more like a convenience or comfort substitution."
-      ),
-      
+
       h4("Distribution of time differences (transit - scooter)"),
       plotOutput("plot_time_diff_dist", height = "380px"),
-      p(
-        "Values above 0 mean transit is slower than scooters for that trip; ",
-        "values below 0 mean transit is faster."
-      ),
+      p("Values above 0 mean transit is slower than scooters for that trip; values below 0 mean transit is faster."),
       
-      tags$ul(
-        tags$li("High decile of substitution share (sub_share)"),
-        tags$li("High decile of population"),
-        tags$li("High decile of boardings density (more impact where riders already use transit)")
-      ),
-      code("sub_priority_score = decile(sub_share) + decile(population) + decile(boardings_density)"),
-      br(), br(),
-      DTOutput("table_priority_sub_tracts"),
       br(),
       
-      h4("Neighbourhoods where scooters fill serious access gaps (low income + low car ownership)"),
+      h4("Travel time distributions across modes"),
       p(
-        "Gap priority emphasizes equity-sensitive characteristics and transit deprivation. ",
-        "We convert each variable into deciles (1–10) and then build a weighted score:"
+        "These plots compare the distribution of travel times across the observed scooter duration and Google-estimated ",
+        "bike and transit durations for the same OD pairs. Distributions matter because medians can hide variability—",
+        "especially for transit (waiting + transfers)."
       ),
-      tags$ul(
-        tags$li(strong("Gap share (more weight): "), "tracts where many scooter trips are far from transit."),
-        tags$li(strong("Median income (more weight): "), "tracts with lower incomes get higher scores."),
-        tags$li(strong("Zero-car share: "), "tracts with more households without cars."),
-        tags$li(strong("Boardings density: "), "tracts with fewer transit boardings per km²."),
-        tags$li(strong("Population: "), "tracts where more people are affected.")
-      ),
-      code("gap_priority_score = 1.5·decile(gap_share) + 1.5·decile(-median_income) + decile(zero_car_share) + decile(-boardings_density) + decile(population)"),
-      br(), br(),
-      DTOutput("table_priority_gap_tracts"),
+      plotOutput("plot_mode_boxplot", height = "360px"),
+      plotOutput("plot_mode_density", height = "360px"),
       
       br(), br(),
       
-    h3("Methods in brief"),
-    p(
-      strong("Behaviour classification: "),
-      "Each scooter trip is linked to anonymized road segments. We mark a segment as near transit if it lies within 30 m of any transit stop. ",
-      "Trips are classified as first_mile, last_mile, sub_multi, sub_one, or none based on which ends are near stops and whether the same bus route serves both ends."
+      br(), br(),
+      
+      h2("7B. Travel-time summary tables"),
+      p(
+        "These tables summarize the same pilot sample used in the plots. ",
+        "They provide quick, report-ready numbers: central tendency by mode, ",
+        "how often each mode is fastest, and the trip-level comparison table."
+      ),
+      
+      h4("Average and median travel time by mode"),
+      DTOutput("table_summary_stats"),
+      br(),
+      
+      h4("How often each mode is fastest"),
+      DTOutput("table_fastest_counts"),
+      br(),
+      
+      h4("Trip-level comparison table"),
+      DTOutput("table_final_table"),
+          
+      br(), br(),
+      
+      h3("Methods in brief"),
+      p(
+        strong("Behaviour classification: "),
+        "Trips are classified as first_mile, last_mile, sub_multi, sub_one, or none based on whether trip ends are within 30 m of transit stops and whether the same bus route serves both ends."
+      ),
+      p(
+        strong("Travel-time benchmarking: "),
+        "Observed scooter durations are compared to Google-estimated bike and transit durations for the same OD pairs. These are estimates and do not capture every rider preference, but they provide a consistent benchmark."
+      )
     ),
-    p(
-      strong("Hourly averages: "),
-      "For each day, hour, and behaviour type, we count trips and then average across days to get typical daily patterns separately for weekdays and weekends."
-    ),
-    p(
-      strong("Distances to stops: "),
-      "For each trip, we compute the straight-line distance from the centroid of the start segment to the nearest transit stop. ",
-      "These are shown on a log scale because distances span orders of magnitude."
-    ),
-    p(
-      strong("Route leakiness: "),
-      "For each bus route we count scooter trips that could be replaced by a single bus ride (sub_one) and compare them to annual boardings on that route. ",
-      "Leakiness is defined as ",
-      code("leakiness = scooter_substitution_trips / route_boardings"),
-      " and is only reported for routes with at least 20 substitution trips and boardings above the median so low-volume express routes do not dominate."
-    ),
-    p(
-      strong("Tract-level substitution and gap shares: "),
-      "We assign scooter trip starts to census tracts and compute the share of trips in each tract that are sub_one (substitution) or none (gap). ",
-      "These shares are mapped for Minneapolis tracts only."
-    ),
-    p(
-      strong("Equity-focused gap priority: "),
-      "We convert gap share, income, zero-car share, boardings density, and population into deciles and create ",
-      code("gap_priority_score"),
-      " with extra weight on gap share and lower incomes. ",
-      "The highest-scoring tracts are listed in the table and outlined on the gap map."
-    )),
     
     tabPanel(
       "Substitution explorer",
       sidebarLayout(
         sidebarPanel(
           h4("Explore scooter trips that duplicate a single bus route"),
-          p(
-            "Use this tab to zoom in on a specific bus route and see scooter trips that ",
-            "start and end near stops on that route. These trips are our best candidates for ",
-            strong("one-route substitutions (sub_one).")
-          ),
-          p(
-            "The map shows a downsampled set of scooter trip start and end points for the selected route. ",
-            "The table lists the underlying scooter trips and their associated route."
-          ),
-          selectInput(
-            "route_select",
-            "Choose a route to examine:",
-            choices = NULL
-          )
+          selectInput("route_select", "Choose a route to examine:", choices = NULL)
         ),
         mainPanel(
           leafletOutput("subMap", height = "600px"),
           br(),
-          p(
-            "Each point represents a scooter trip that could plausibly be replaced by this bus route. ",
-            "The table below lists the downsampled trip IDs and route metadata."
-          ),
-          h4("Scooter trips on this route (sample)"),
           DTOutput("subTable")
         )
-    )),
+      )
+    ),
     
     tabPanel(
       "Gap explorer",
       sidebarLayout(
         sidebarPanel(
           h4("Explore where scooters run far from transit"),
-          p(
-            "This map shows the share of scooter trips in each tract where neither end is near a transit stop ",
-            "(",
-            code("gap_share = gap_trips / all_trips"),
-            ")."
-          ),
-          p(
-            "A value of 0% means all scooter trips start or end near transit; ",
-            "100% would mean every scooter trip happens beyond walking distance of transit."
-          ),
           sliderInput(
             "min_gap_share",
             "Minimum gap trip share to highlight:",
@@ -495,12 +330,7 @@ ui <- fluidPage(
           )
         ),
         mainPanel(
-          leafletOutput("gapMap", height = "600px"),
-          br(),
-          p(
-            "Use the slider to focus on the highest-gap areas. These are good candidates ",
-            "for either improving transit coverage or investing in safer micromobility infrastructure."
-          )
+          leafletOutput("gapMap", height = "600px")
         )
       )
     ),
@@ -509,7 +339,7 @@ ui <- fluidPage(
       "Travel-time sandbox",
       sidebarLayout(
         sidebarPanel(
-          h4("Compare scooter vs transit time between two stops"),
+          h4("Compare bike vs transit time between two stops (Google Directions)"),
           selectInput("sandbox_origin", "Origin stop:", choices = NULL),
           selectInput("sandbox_dest", "Destination stop:", choices = NULL),
           actionButton("run_sandbox", "Run Google Directions"),
@@ -521,7 +351,6 @@ ui <- fluidPage(
         )
       )
     )
-    
   )
 )
 
@@ -542,61 +371,40 @@ server <- function(input, output, session) {
     updateSelectInput(session, "route_select", choices = choices)
   })
   
+  # --- Plots ---
   output$plot_behavior_comp <- renderPlot({
-    ggplot(behavior_counts,
-           aes(x = behavior_type, y = pct, fill = behavior_type)) +
+    ggplot(behavior_counts, aes(x = behavior_type, y = pct, fill = behavior_type)) +
       geom_col() +
       scale_y_continuous(labels = percent_format(accuracy = 1)) +
       scale_fill_manual(values = beh_pal) +
-      labs(
-        title = "Composition of scooter trip types",
-        x = "Behavior type",
-        y = "Share of all scooter trips"
-      ) +
+      labs(title = "Composition of scooter trip types", x = "Behavior type", y = "Share of all scooter trips") +
       theme_minimal(base_size = 13) +
       theme(legend.position = "none")
   })
   
   output$plot_hourly_trips <- renderPlot({
-    ggplot(hourly_normalized,
-           aes(x = hour, y = avg_trips,
-               color = behavior_type, group = behavior_type)) +
+    ggplot(hourly_normalized, aes(x = hour, y = avg_trips, color = behavior_type, group = behavior_type)) +
       geom_line(size = 1.1) +
       facet_wrap(~ day_type, ncol = 1) +
       scale_x_continuous(breaks = 0:23) +
       scale_color_manual(values = beh_pal) +
-      labs(
-        title = "Average hourly scooter trips by behavior type",
-        x = "Hour of day",
-        y = "Average trips per hour",
-        color = "Behavior type"
-      ) +
+      labs(title = "Average hourly scooter trips by behavior type", x = "Hour of day", y = "Average trips per hour", color = "Behavior type") +
       theme_minimal(base_size = 13)
   })
   
   output$plot_hourly_share <- renderPlot({
-    ggplot(hourly_share,
-           aes(x = hour, y = avg_share,
-               color = behavior_type, group = behavior_type)) +
+    ggplot(hourly_share, aes(x = hour, y = avg_share, color = behavior_type, group = behavior_type)) +
       geom_line(size = 1.1) +
       facet_wrap(~ day_type, ncol = 1) +
       scale_x_continuous(breaks = 0:23) +
       scale_y_continuous(labels = percent_format(accuracy = 1)) +
       scale_color_manual(values = beh_pal) +
-      labs(
-        title = "Average hourly scooter trip share by behavior type",
-        x = "Hour of day",
-        y = "Average trip share per hour",
-        color = "Behavior type"
-      ) +
+      labs(title = "Average hourly scooter trip share by behavior type", x = "Hour of day", y = "Average trip share per hour", color = "Behavior type") +
       theme_minimal(base_size = 13)
   })
   
   output$plot_dist_box <- renderPlot({
-    ggplot(start_points_beh_small,
-           aes(x = behavior_type,
-               y = dist_to_nearest_stop,
-               fill = behavior_type)) +
+    ggplot(start_points_beh_small, aes(x = behavior_type, y = dist_to_nearest_stop, fill = behavior_type)) +
       geom_boxplot(outlier.alpha = 0.2, alpha = 0.8) +
       scale_fill_manual(values = beh_pal) +
       scale_y_continuous(
@@ -614,9 +422,7 @@ server <- function(input, output, session) {
   })
   
   output$plot_leaky_routes <- renderPlot({
-    ggplot(top_leaky,
-           aes(x = reorder(route_short_name, leakiness_raw),
-               y = leakiness_raw)) +
+    ggplot(top_leaky, aes(x = reorder(route_short_name, leakiness_raw), y = leakiness_raw)) +
       geom_col(fill = "#d95f02") +
       coord_flip() +
       scale_y_continuous(labels = percent_format(accuracy = 0.1)) +
@@ -634,23 +440,17 @@ server <- function(input, output, session) {
       dplyr::filter(GEOID %in% priority_sub_tracts$GEOID)
     
     ggplot() +
-      geom_sf(data = tracts_ll_small,
-              aes(fill = sub_share), color = NA) +
+      geom_sf(data = tracts_ll_small, aes(fill = sub_share), color = NA) +
       scale_fill_gradientn(
         colours = c("#bae4bc", "#0868ac"),
         limits  = c(0, 1),
         labels  = percent_format(accuracy = 1),
         name    = "Substitution share"
       ) +
-      geom_sf(
-        data = priority_sub_geoms,
-        fill = NA,
-        color = "black",
-        linewidth = 0.6
-      ) +
+      geom_sf(data = priority_sub_geoms, fill = NA, color = "black", linewidth = 0.6) +
       labs(
         title = "Where scooters most often duplicate a single bus route",
-        subtitle = "Black outlines show the top substitution-priority tracts in the table below"
+        subtitle = "Black outlines show the top substitution-priority tracts"
       ) +
       theme_minimal(base_size = 13) +
       theme(axis.title = element_blank())
@@ -661,43 +461,24 @@ server <- function(input, output, session) {
       dplyr::filter(GEOID %in% priority_gap_tracts$GEOID)
     
     ggplot() +
-      geom_sf(data = tracts_ll_small,
-              aes(fill = gap_share), color = NA) +
+      geom_sf(data = tracts_ll_small, aes(fill = gap_share), color = NA) +
       scale_fill_gradientn(
         colours = c("#bae4bc", "#0868ac"),
         limits  = c(0, 1),
         labels  = percent_format(accuracy = 1),
         name    = "Gap share"
       ) +
-      geom_sf(
-        data = priority_gap_geoms,
-        fill = NA,
-        color = "black",
-        linewidth = 0.6
-      ) +
+      geom_sf(data = priority_gap_geoms, fill = NA, color = "black", linewidth = 0.6) +
       labs(
         title = "Where scooters operate beyond walking distance of transit",
-        subtitle = "Black outlines show the top gap-priority tracts in the table below"
+        subtitle = "Black outlines show the top gap-priority tracts"
       ) +
       theme_minimal(base_size = 13) +
       theme(axis.title = element_blank())
   })
   
-  output$plot_time_by_behavior <- renderPlot({
-    ggplot(time_by_behavior,
-           aes(x = behavior_type)) +
-      geom_col(aes(y = median_scooter, fill = "Scooter"), position = "dodge") +
-      geom_col(aes(y = median_transit, fill = "Transit"), position = "dodge") +
-      scale_y_continuous("Median time (minutes)") +
-      scale_fill_viridis_d(name = "Mode", option = "plasma", end = 0.9) +
-      labs(title = "Median travel time by behaviour type (pilot sample)") +
-      theme_minimal(base_size = 13) +
-      theme(axis.title.x = element_blank())
-  })
-  
   output$plot_time_diff_dist <- renderPlot({
-    ggplot(time_diff_dist,
-           aes(x = diff_min, fill = behavior_type)) +
+    ggplot(time_diff_dist, aes(x = diff_min, fill = behavior_type)) +
       geom_histogram(bins = 30, alpha = 0.7, position = "identity") +
       geom_vline(xintercept = 0, linetype = "dashed") +
       scale_fill_viridis_d(option = "plasma", end = 0.95, name = "Behaviour") +
@@ -709,11 +490,55 @@ server <- function(input, output, session) {
       theme_minimal(base_size = 13)
   })
   
+  # --- New mode distribution plots (from final_table RDS) ---
+  viz_data <- reactive({
+    req(final_table)
+    final_table %>%
+      select(trip_id, micromobility_min, bike_min, transit_min) %>%
+      pivot_longer(cols = -trip_id, names_to = "mode", values_to = "duration") %>%
+      mutate(
+        mode = recode(
+          mode,
+          micromobility_min = "Observed scooter trip (actual)",
+          bike_min          = "Google Directions: Bike",
+          transit_min       = "Google Directions: Transit"
+        ),
+        duration = as.numeric(duration)
+      ) %>%
+      filter(is.finite(duration), duration > 0)
+  })
+  
+  output$plot_mode_boxplot <- renderPlot({
+    ggplot(viz_data(), aes(x = mode, y = duration, fill = mode)) +
+      geom_boxplot(outlier.alpha = 0.25) +
+      labs(
+        title = "Comparing travel times by mode (pilot sample)",
+        x = NULL,
+        y = "Duration (minutes)"
+      ) +
+      theme_minimal(base_size = 13) +
+      theme(
+        legend.position = "none",
+        axis.text.x = element_text(angle = 15, hjust = 1)
+      )
+  })
+  
+  output$plot_mode_density <- renderPlot({
+    ggplot(viz_data(), aes(x = duration, color = mode, fill = mode)) +
+      geom_density(alpha = 0.25, linewidth = 1) +
+      labs(
+        title = "Distribution of travel times by mode (pilot sample)",
+        x = "Duration (minutes)",
+        y = "Density"
+      ) +
+      theme_minimal(base_size = 13) +
+      theme(legend.title = element_blank())
+  })
+  
+  # --- Tables: priority lists ---
   output$table_priority_sub_tracts <- renderDT({
     priority_sub_tracts %>%
-      mutate(
-        sub_share = percent(sub_share, accuracy = 0.1)
-      ) %>%
+      mutate(sub_share = percent(sub_share, accuracy = 0.1)) %>%
       datatable(options = list(pageLength = 5))
   })
   
@@ -726,19 +551,28 @@ server <- function(input, output, session) {
       datatable(options = list(pageLength = 5))
   })
   
+  # --- Tables: travel-time pilot tables ---
+  output$table_summary_stats <- renderDT({
+    datatable(summary_stats, options = list(dom = "t", pageLength = 50), rownames = FALSE)
+  })
+  
+  output$table_fastest_counts <- renderDT({
+    datatable(fastest_counts, options = list(dom = "t", pageLength = 50), rownames = FALSE)
+  })
+  
+  output$table_final_table <- renderDT({
+    datatable(final_table, options = list(pageLength = 10, scrollX = TRUE), rownames = FALSE)
+  })
+  
+  # --- Substitution explorer ---
   output$subMap <- renderLeaflet({
     req(input$route_select)
     
-    selected <- same_route_small %>%
-      filter(route_short_name == input$route_select)
-    
+    selected <- same_route_small %>% filter(route_short_name == input$route_select)
     ids <- unique(selected$trip_id)
     
-    starts_filtered <- start_points_map_small %>%
-      filter(trip_id %in% ids)
-    
-    ends_filtered <- end_points_map_small %>%
-      filter(trip_id %in% ids)
+    starts_filtered <- start_points_map_small %>% filter(trip_id %in% ids)
+    ends_filtered   <- end_points_map_small   %>% filter(trip_id %in% ids)
     
     leaflet() %>%
       addProviderTiles(providers$OpenStreetMap) %>%
@@ -776,6 +610,7 @@ server <- function(input, output, session) {
       datatable(options = list(pageLength = 10))
   })
   
+  # --- Gap explorer ---
   output$gapMap <- renderLeaflet({
     pal <- colorNumeric(
       palette = c("#fdcc8a", "#b30000"),
@@ -852,8 +687,8 @@ server <- function(input, output, session) {
         tibble::tibble(
           mode = c("bicycling", "transit"),
           duration_min = NA_real_,
-          distance_km = NA_real_,
-          summary = paste("R error:", conditionMessage(e))
+          distance_km  = NA_real_,
+          summary      = paste("R error:", conditionMessage(e))
         )
       }
     )
@@ -873,12 +708,11 @@ server <- function(input, output, session) {
   output$sandbox_result_tbl <- renderTable({
     req(sandbox_times())
     sandbox_times() %>%
-      dplyr::mutate(
+      mutate(
         duration_min = round(duration_min, 1),
         distance_km  = round(distance_km, 2)
       )
   })
-  
 }
 
 shinyApp(ui, server)

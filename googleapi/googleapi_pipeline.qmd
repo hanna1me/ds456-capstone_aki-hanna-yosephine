@@ -598,3 +598,125 @@ saveRDS(google_results_clean, "data/google_results_wide.rds")
 saveRDS(google_results_long,  "data/google_results_long.rds")
 ```
 
+
+## For app.R
+
+```{r}
+final_results_r <- reactive({
+  req(sample_100, bike_summary, transit_summary)
+
+  sample_100 %>%
+    select(
+      trip_id, duration_micro_min, StartTime,
+      start_stop_id_snap, start_stop_lat_snap, start_stop_lon_snap,
+      end_stop_id_snap,   end_stop_lat_snap,   end_stop_lon_snap
+    ) %>%
+    left_join(bike_summary,    by = "trip_id") %>%
+    left_join(transit_summary, by = "trip_id")
+})
+
+saveRDS(final_results_r(), "data/final_results_r.rds")
+```
+
+```{r}
+summary_stats_r <- reactive({
+  df <- final_results_r()
+
+  df %>%
+    summarise(
+      avg_micromobility    = mean(duration_micro_min,   na.rm = TRUE),
+      avg_bike             = mean(bike_duration_min,    na.rm = TRUE),
+      avg_transit          = mean(transit_duration_min, na.rm = TRUE),
+      median_micromobility = median(duration_micro_min,   na.rm = TRUE),
+      median_bike          = median(bike_duration_min,    na.rm = TRUE),
+      median_transit       = median(transit_duration_min, na.rm = TRUE),
+      n_trips              = dplyr::n()
+    ) %>%
+    tidyr::pivot_longer(
+      cols = -n_trips,
+      names_to = "metric",
+      values_to = "minutes"
+    ) %>%
+    mutate(minutes = round(minutes, 1))
+})
+```
+
+```{r}
+fastest_counts_r <- reactive({
+  df <- final_results_r() %>%
+    select(trip_id, duration_micro_min, bike_duration_min, transit_duration_min) %>%
+    filter(
+      is.finite(duration_micro_min),
+      is.finite(bike_duration_min),
+      is.finite(transit_duration_min)
+    )
+
+  df %>%
+    rowwise() %>%
+    mutate(
+      fastest = min(duration_micro_min, bike_duration_min, transit_duration_min),
+      winner = {
+        winners <- c(
+          Micromobility = (duration_micro_min == fastest),
+          Bike         = (bike_duration_min == fastest),
+          Transit      = (transit_duration_min == fastest)
+        )
+        w <- names(winners)[winners]
+        if (length(w) == 1) w else "Tie"
+      }
+    ) %>%
+    ungroup() %>%
+    count(winner, name = "n") %>%
+    mutate(
+      share = n / sum(n),
+      share = scales::percent(share, accuracy = 0.1)
+    ) %>%
+    arrange(desc(n))
+})
+```
+
+```{r}
+diffs_r <- reactive({
+  final_results_r() %>%
+    mutate(
+      micro_vs_bike    = duration_micro_min - bike_duration_min,
+      micro_vs_transit = duration_micro_min - transit_duration_min,
+      bike_vs_transit  = bike_duration_min - transit_duration_min
+    )
+})
+
+final_table_r <- reactive({
+  final_results_r() %>%
+    transmute(
+      trip_id,
+      micromobility_min = round(duration_micro_min, 1),
+      bike_min          = round(bike_duration_min, 1),
+      transit_min       = round(transit_duration_min, 1),
+      micro_vs_bike     = round(duration_micro_min - bike_duration_min, 1),
+      micro_vs_transit  = round(duration_micro_min - transit_duration_min, 1)
+    )
+})
+```
+
+```{r}
+output$table_summary_stats <- renderDT({
+  datatable(summary_stats_r(), options = list(dom = "t", pageLength = 20))
+})
+
+output$table_fastest_counts <- renderDT({
+  datatable(fastest_counts_r(), options = list(dom = "t", pageLength = 20))
+})
+
+output$table_final_table <- renderDT({
+  datatable(
+    final_table_r(),
+    options = list(pageLength = 10, scrollX = TRUE),
+    rownames = FALSE
+  )
+})
+```
+
+
+
+
+
