@@ -782,8 +782,7 @@ server <- function(input, output, session) {
         x = "Transit time − scooter time (minutes)",
         y = "Trips",
         title = "Where do scooters save time versus transit?"
-      ) +
-      theme_minimal(base_size = 13)
+      ) 
   })
   
   # --- New mode distribution plots (from final_table RDS) ---
@@ -812,7 +811,6 @@ server <- function(input, output, session) {
         x = NULL,
         y = "Duration (minutes)"
       ) +
-      theme_minimal(base_size = 13) +
       theme(
         legend.position = "none",
         axis.text.x = element_text(angle = 15, hjust = 1)
@@ -827,7 +825,6 @@ server <- function(input, output, session) {
         x = "Duration (minutes)",
         y = "Density"
       ) +
-      theme_minimal(base_size = 13) +
       theme(legend.title = element_blank())
   })
   
