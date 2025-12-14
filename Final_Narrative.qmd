@@ -17,7 +17,7 @@ editor: visual
 
 **Motivation**
 
-Our project stemmed from our shared interest in spacial data analysis, one of its specific trait being its versatility. After trying different datasets of spacial data, we realized quite quickly that trying to do international data would be quite difficult as different countries have different systems of storing data and that data would more likely be behind a paywall. We narrowed our scope to minneapolis due to its openess of its transportation data. While looking though that data we discovered that they tracked the usage of e-bike and e-scooters such as lime which is relatively new to the minneapolis transportation. Comparing a new form of transportation to the usage of the older more structured form could bring us more insight into the efficacy of the lime scooter.
+Our project stemmed from our shared interest in spacial data analysis, one of its specific trait being its versatility. After trying different datasets of spacial data, we realized quite quickly that trying to do international data would be quite difficult as different countries have different systems of storing data and that data would more likely be behind a paywall. We narrowed our scope to Minneapolis due to its openness of its transportation data. While looking though that data we discovered that they tracked the usage of e-bike and e-scooters such as lime which is relatively new to the Minneapolis transportation. Comparing a new form of transportation to the usage of the older more structured form could bring us more insight into the efficacy of the lime scooter and what gaps our current public transportation has for the general populace.
 
 With the rise of urbanization, cities are facing increasing challenges in managing transportation systems efficiently. Redundant routes can lead to wasted resources, increased traffic congestion, and higher emissions. By identifying and optimizing these routes, we can improve the overall efficiency of public transit and micro mobility options in Minneapolis, making it easier for residents to navigate the city while reducing environmental impact.
 
@@ -25,11 +25,11 @@ With the rise of urbanization, cities are facing increasing challenges in managi
 
 For this project we used data from both sources that we found online and sources that we got from in-person meetings.
 
-Our first source we got came from the Open Minneapolis website. This website shares all the city data form Minneapolis to the general public. This website has everything from bus routes to 3-11 calls to an e-scooter dashboard. The problem with this data that it is not very good. It has the data of the of the beginning point... This would have been a dead end if we did not contact Max Gonzalez who was able to help us query better data. We were able to get all the data in 2025 on e-scooter in regards to their start point, end point, ride duration, ride distances, and ride times.
+Our first source we got came from the Open Minneapolis website. This website shares all the city data form Minneapolis to the general public. This website has everything from bus routes to 3-11 calls to an e-scooter dashboard. The problem with this data that it is not very good. It has the data of the of the beginning point, end points, and time. This would have been a dead end if we did not contact Max Gonzalez who was able to help us query better data. We were able to get all the data in 2025 on e-scooter in regards to their start point, end point, ride duration, ride distances, date and ride times.
 
 The second data source that we are using is the GTFS data. GTFS (or General Transit Feed Specification) is an open source documentation platform for international transit schedules and routes. Although this has good data on all the transit(stop locations, schedules, routes, etc) they were all in separate text files that needed to be cleaned and joined.
 
-The 3rd data source we are using is the google API. this API allows us to use google maps data to see the most efficient routes to go to any place on the map separated by the mode of transportation (bikes, public transit, cars). We can use this API to track if the usage of micromobility is acatually a better form of transit than any of the other public transit method.
+The 3rd data source we are using is the Google API. this API allows us to use Google maps data to see the most efficient routes to go to any place on the map separated by the mode of transportation (bikes, public transit, cars). We can use this API to track if the usage of micromobility is actually a better form of transit than any of the other public transit method.
 
 ## Result
 
@@ -52,15 +52,16 @@ Overall, we can see that micromobility is filling in gaps in our public transit 
 
 ## Method Evaluation & Limitations
 
+While this project has brought in some interesting insights to how micrmobility interacts with the rest of our transportation systems, there are still some limitations in our work.
+
+One such limitations is our inability to track e-scooter trips. Although we are able to get the points where the trips starts and ends, we are unable to get the routes of the scooter for security reasons. This means that we are forced to assume the riders are taking the most efficient and safest route to get from point A to point B. simply looking at the amount of outliers, we can see that this is not the case. People use scooters for all kinds of activities that are not tracked, for instance dropping someone off or going on a joy ride will have vastly different implications to our vizualizations.
+
 While the grid-based density mapping provides a detailed and intuitive view of how micromobility demand varies across Minneapolis, several methodological considerations influence the interpretation of results.
 
 First, the choice of grid size strongly shapes the apparent concentration of trips. Smaller grids give more localized detail but can exaggerate noise, while larger grids smooth transitions and may mask meaningful micro-spatial patterns. Although the selected grid seems to balance clarity with granularity, results should be contextualized in relation to this design choice.
 
 Second, density values represent raw counts rather than normalized rates. High-density zones may reflect not only true user demand but also differences in device availability, operator service priorities, or the permitted riding zones defined by vendors. Areas with low or missing values may not indicate lack of demand but rather policy-based or supply-based restrictions (e.g., geofencing, maintenance gaps, or availability biases). Without incorporating supply-side metrics, the map reflects observed usage rather than potential or unmet demand.
 
-Additionally, this analysis does not incorporate temporal variability. Trip patterns fluctuate sharply by time of day, day of week, and season, especially in a city with pronounced winter constraints like Minneapolis. A single aggregated density map conceals these temporal dynamics and may overrepresent peak-season or peak-hour behavior.
-
-Finally, the analysis does not directly account for socioeconomic factors or land use conditions. Micromobility access and usage are known to vary with income, housing density, employment centers, campus activity, and retail clusters. Without integrating census, zoning, or transit frequency data, the explanation of observed patterns remains associative rather than causal.
 
 Despite these limitations, the grid-based density approach provides a strong spatial foundation for understanding micromobility patterns across Minneapolis. It effectively highlights hotspots, reveals multimodal connections, and guides future steps such as integrating environmental variables, transit data, and temporal patterns to form a more holistic mobility assessment.
 
