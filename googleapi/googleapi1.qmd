@@ -15,7 +15,6 @@ library(tidyr)
 library(sf)
 ```
 
-
 ```{r}
 trip_stops <- trip_proximity %>%
   sf::st_drop_geometry() %>%
@@ -28,13 +27,17 @@ trip_stops <- trip_proximity %>%
 head(trip_stops)
 ```
 
-
 ```{r}
 valid_trips <- valid_trips %>%
   mutate(duration_micro_min = TripDuration / 60)
 ```
 
 ```{r}
+stops$stop_id <- as.double(stops$stop_id)
+stop_routes$stop_id <- as.double(stop_routes$stop_id)
+trip_stops$start_stop_id <- as.double(trip_stops$start_stop_id)
+trip_stops$end_stop_id <- as.double(trip_stops$end_stop_id)
+
 trip_route_candidates <- trip_stops %>%
   left_join(stop_routes, by = c("start_stop_id" = "stop_id"), relationship = "many-to-many") %>%
   rename(route_id_start = route_id) %>%
@@ -80,6 +83,7 @@ micro_vs_transit <- valid_trips %>%
     diff_transit_minus_micro = transit_travel_min - duration_micro_min
   )
 ```
+
 # redo
 
 ```{r}
@@ -121,7 +125,6 @@ compute_segment_travel_time <- function(route_short_name,
 }
 ```
 
-
 ```{r}
 trip_transit_times <- trip_route_candidates %>%
   rowwise() %>%
@@ -142,7 +145,3 @@ trip_transit_times <- trip_route_candidates %>%
     .groups = "drop"
   )
 ```
-
-
-
-

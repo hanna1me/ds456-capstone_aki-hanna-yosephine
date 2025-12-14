@@ -23,9 +23,9 @@ library(tibble)
 ```
 
 ```{r load-data, warning=FALSE, message=FALSE}
-load("apienvironment.RData")
-stops <- read.csv("stops.csv")
-sample_trips <- read.csv("sample_trips.csv")
+#load("apienvironment.RData")
+#stops <- read.csv("stops.csv")
+#sample_trips <- read.csv("sample_trips.csv")
 ```
 
 ```{r api-key, warning=FALSE, message=FALSE}
@@ -495,6 +495,106 @@ head()
 ```
 
 
+```{r}
+google_results_clean <- google_results %>%
+transmute(
+    trip_id,
+
+    start_lat, start_lon,
+    end_lat, end_lon,
+
+    StartTime = StartTime.x,
+
+    start_stop_id_snap = start_stop_id_snap.x,
+    start_stop_lat_snap = start_stop_lat_snap.x,
+    start_stop_lon_snap = start_stop_lon_snap.x,
+
+    end_stop_id_snap = end_stop_id_snap.x,
+    end_stop_lat_snap = end_stop_lat_snap.x,
+    end_stop_lon_snap = end_stop_lon_snap.x,
+
+    duration_micro_min = duration_micro_min.x,
+    bike_duration_min,
+    transit_duration_min
+  )
+```
+
+```{r}
+google_results_long <- google_results_clean %>%
+  pivot_longer(
+    cols = c(duration_micro_min, bike_duration_min, transit_duration_min),
+    names_to = "mode_raw",
+    values_to = "duration_min"
+  ) %>%
+  mutate(
+    mode = recode(
+      mode_raw,
+      duration_micro_min = "scooter",
+      bike_duration_min = "bike",
+      transit_duration_min = "transit"
+    )
+  ) %>%
+  select(
+    trip_id, StartTime,
+    start_lat, start_lon, end_lat, end_lon,
+    start_stop_id_snap, start_stop_lat_snap, start_stop_lon_snap,
+    end_stop_id_snap, end_stop_lat_snap, end_stop_lon_snap,
+    mode, duration_min
+  )
+```
+
+```{r}
+google_results_long <- google_results %>%
+transmute(
+    trip_id,
+    StartTime = StartTime.x,
+
+    start_lat, start_lon,
+    end_lat, end_lon,
+
+    start_stop_id_snap = start_stop_id_snap.x,
+    start_stop_lat_snap = start_stop_lat_snap.x,
+    start_stop_lon_snap = start_stop_lon_snap.x,
+
+    end_stop_id_snap   = end_stop_id_snap.x,
+    end_stop_lat_snap  = end_stop_lat_snap.x,
+    end_stop_lon_snap  = end_stop_lon_snap.x,
+
+    duration_micro_min = duration_micro_min.x,
+    bike_duration_min,
+    transit_duration_min
+  ) %>%
+pivot_longer(
+    cols = c(duration_micro_min, bike_duration_min, transit_duration_min),
+    names_to = "mode_raw",
+    values_to = "duration_min"
+  ) %>%
+mutate(
+    mode = recode(
+      mode_raw,
+      "duration_micro_min" = "scooter",
+      "bike_duration_min" = "bike",
+      "transit_duration_min" = "transit"
+    )
+  ) %>%
+select(
+    trip_id, StartTime,
+    start_lat, start_lon, end_lat, end_lon,
+    start_stop_id_snap, start_stop_lat_snap, start_stop_lon_snap,
+    end_stop_id_snap, end_stop_lat_snap, end_stop_lon_snap,
+    mode, duration_min
+  )
+```
 
 
+
+```{r save-google-results}
+saveRDS(bike_results,         "data/bike_results.rds")
+saveRDS(bike_summary,         "data/bike_summary.rds")
+saveRDS(transit_results,      "data/transit_results.rds")
+saveRDS(transit_summary,         "data/transit_summary.rds")
+saveRDS(comparison_N,         "data/comparison_N.rds")
+saveRDS(google_results_clean, "data/google_results_wide.rds")
+saveRDS(google_results_long,  "data/google_results_long.rds")
+```
 

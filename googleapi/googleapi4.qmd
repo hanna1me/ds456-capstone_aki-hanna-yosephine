@@ -6,7 +6,7 @@ editor: visual
 ---
 
 ```{r}
-Sys.setenv(GOOGLE_MAPS_KEY = "()")
+Sys.setenv(GOOGLE_MAPS_KEY = "")
 ```
 
 ```{r}
@@ -415,6 +415,9 @@ transit_results_clean <- transit_results %>%
   group_by(trip_id) %>%
   slice(1) %>%
   ungroup()
+
+saveRDS(bike_results_clean,    "data/bike_results_clean.rds")
+saveRDS(transit_results_clean, "data/transit_results_clean.rds")
 ```
 
 ```{r}
