@@ -482,7 +482,7 @@ ui <- fluidPage(
               ),
               code("gap_priority_score = 1.5·decile(gap_share) + 1.5·decile(-median_income) + decile(zero_car_share) + decile(-boardings_density) + decile(population)"),
               br(), br(),
-              DTOutput("table_priority_gap_tracts"),
+              DTOutput("table_priority_gap_tracts")
 
               br(), br(),
       
@@ -531,6 +531,15 @@ ui <- fluidPage(
           
       br(), br(),
       
+      h3("Methods in brief"),
+      p(
+        strong("Behaviour classification: "),
+        "Trips are classified as first_mile, last_mile, sub_multi, sub_one, or none based on whether trip ends are within 30 m of transit stops and whether the same bus route serves both ends."
+      ),
+      p(
+        strong("Travel-time benchmarking: "),
+        "Observed scooter durations are compared to Google-estimated bike and transit durations for the same OD pairs. These are estimates and do not capture every rider preference, but they provide a consistent benchmark."
+      )
     ),
           
           # ---- Methods in brief ----
