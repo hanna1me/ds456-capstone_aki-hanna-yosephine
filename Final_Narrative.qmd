@@ -6,7 +6,9 @@ editor: visual
 ---
 
 # Projects in Data Science: A Crossover of Micromobility and Public Transportation in Minneapolis
-
+```{r}
+library(knitr)
+```
 *Aki Wada, Hanna Chang, and Yosephine Manihuruk*
 
 ## Project Summary
@@ -41,13 +43,22 @@ Trip density also appears to align with major transit lines and corridors. The p
 
 Interestingly enough the e-scooter usage seems to be filling in more gaps in the transportation than we expected. over 60% of e-scooter users are not overlapping inside the bus routes. In fact the majority of trips do not have any overlap with bus stops what so ever. We expected that most e-scooter rides would be utilizes as the first or last mile of a trip; meaning that e-scooters would be used to get to bus stops instead of replace them. Although there is a large portion of data that does support that people are using the e-scooters for this reason, there is still a large portion of the data supports that people are using e-scooters in places where bus routes are not in easily accessible locations. This implies that there are places where there would be an effective for Minneapolis to fill in these gaps of bus routes.
 
-In terms of efficiency of travel, the e-scooters have proven themselves to be a little inefficient. The e-scooters median time is about 6 minutes, They seem to be doubling the median time of bikes at about 3 minutes and to be slightly below transit times at around 8 minutes. We are using median times instead of average time due to the high amount of outliers present in the scooter data. This is most likely due to the fact that people also use e-scooters for leisure instead of effective transportation.
+![](Screenshots/screenshot1.png)
+
+
+In terms of efficiency of travel, the e-scooters have proven themselves to be a little inefficient. The e-scooters median time is about 7 minutes, They seem to be doubling the median time of bikes at about 4 minutes and to be slightly below transit times at around 10 minutes. We are using median times instead of average time due to the high amount of outliers present in the scooter data. This is most likely due to the fact that people also use e-scooters for leisure instead of effective transportation.
+
+![](Screenshots/screenshot2.png)
 
 Looking at the density usage of bikes, micromobility, and transit, we can see there is a correlated usage between micromobility and transit that is no there for bikes. We can see that bike usage is more typically used for shorter trips than that of both transit and micromobility. although micromobility is used for shorter trips than that of transit, its modal distribution is similar to that of transit which could imply that transit and micromobility are used for similar circumstances that separate them from bike usage.
 
+![](Screenshots/screenshot3.png)
+
 Notably, there are bus routes that are seen as less optimal to use than micromobility. In order to track transit routes that are being used less than what people are using e-scooters for we made a measure of leakiness. This measures the amount of ridership on these bus routes divided by how many trips people took on the e-scooters(removing all bus routes that do not get high ridership such as express buses). We get seven bus routes that people prefer using scooters over the traditional methods; Bus route 698 getting over 200% more people using scooters than using that route. This implies there is some flaws with these routes that should be addressed by the Minneapolis Department of Transportation
 
-Overall, we can see that micromobility is filling in gaps in our public transit more throughly than previously examined. Most people are using micromobility in areas that lack a walkable transit stop, opting to use them as intermediaries to get to transit stops or opting to bypass these stops all together. This could be fine for the general populace if it took into account effiecency of transportation as e-scooters are on (median???) faster than transit usage, transit usage will always be useful for when riders have bags or when the weather is not optimal for scooter usage. Although they seem to be the most popular around mixed-use urban centers and least popular in dispersed residential areas, which are typically the same areas where transit is popular, there seems to be gaps of where these in these enviornments where e-scooter are findingtheir niche. These findings support the idea that micromobility is being used as not a substitue for public transit, but a form a transportation that is filling in gaps within our public transit that we should adress.
+![](Screenshots/screenshot4.png)
+
+Overall, we can see that micromobility is filling in gaps in our public transit more throughly than previously examined. Most people are using micromobility in areas that lack a walkable transit stop, opting to use them as intermediaries to get to transit stops or opting to bypass these stops all together. This could be fine for the general populace if it took into account effiecency of transportation as e-scooters are on median faster than transit usage, transit usage will always be useful for when riders have bags or when the weather is not optimal for scooter usage. Although they seem to be the most popular around mixed-use urban centers and least popular in dispersed residential areas, which are typically the same areas where transit is popular, there seems to be gaps of where these in these enviornments where e-scooter are findingtheir niche. These findings support the idea that micromobility is being used as not a substitue for public transit, but a form a transportation that is filling in gaps within our public transit that we should adress.
 
 ## Method Evaluation & Limitations
 
@@ -55,14 +66,13 @@ While this project has brought in some interesting insights to how micrmobility 
 
 One such limitations is our inability to track e-scooter trips. Although we are able to get the points where the trips starts and ends, we are unable to get the routes of the scooter for security reasons. This means that we are forced to assume the riders are taking the most efficient and safest route to get from point A to point B. simply looking at the amount of outliers, we can see that this is not the case. People use scooters for all kinds of activities that are not tracked, for instance dropping someone off or going on a joy ride will have vastly different implications to our visualizations.
 
-First, the choice of grid size strongly shapes the apparent concentration of trips. Smaller grids give more localized detail but can exaggerate noise, while larger grids smooth transitions and may mask meaningful micro-spatial patterns. Although the selected grid seems to balance clarity with granularity, results should be contextualized in relation to this design choice.
+Our project's usage of what is considered walkable distance from a stop can be considered faulty. We decided to use a 30 meter radius around the centerlines to determine walk able distance. If we were to increase this radius around the centerlines we might get different data on how we measure the different behavior types. We think that our findings of having majority bike trips that are not near any bus routes to be unlikely from our own persona experience and what our density map says, so in future explorations of our data we would increase the size of the "walkable area".
 
-Second, density values represent raw counts rather than normalized rates. High-density zones may reflect not only true user demand but also differences in device availability, operator service priorities, or the permitted riding zones defined by vendors. Areas with low or missing values may not indicate lack of demand but rather policy-based or supply-based restrictions (e.g., geofencing, maintenance gaps, or availability biases). Without incorporating supply-side metrics, the map reflects observed usage rather than potential or unmet demand.
+The choice of grid size strongly shapes the apparent concentration of trips. Smaller grids give more localized detail but can exaggerate noise, while larger grids smooth transitions and may mask meaningful micro-spatial patterns. Although the selected grid seems to balance clarity with granularity, results should be contextualized in relation to this design choice.
 
-Another
+Density values represent raw counts rather than normalized rates. High-density zones may reflect not only true user demand but also differences in device availability, operator service priorities, or the permitted riding zones defined by vendors. Areas with low or missing values may not indicate lack of demand but rather policy-based or supply-based restrictions (e.g., geofencing, maintenance gaps, or availability biases). Without incorporating supply-side metrics, the map reflects observed usage rather than potential or unmet demand.
 
-
-Despite these limitations, the grid-based density approach provides a strong spatial foundation for understanding micromobility patterns across Minneapolis. It effectively highlights hotspots, reveals multimodal connections, and guides future steps such as integrating environmental variables, transit data, and temporal patterns to form a more holistic mobility assessment.
+Although there can be many changes we can apply to our data as we assumed what would be considered readable for our density map, what is considered an optimal route for our micromobility data, and what is considered walkable with out transit data we think that our current assumptions generally match what we believe to be a good visualizations of how micromobility interacts with our transit system. If we were to ever revist this project it would be imperative that we see what would happen if we change these factors and what that result would mean for our current analysis.
 
 ## Member Contributions
 
