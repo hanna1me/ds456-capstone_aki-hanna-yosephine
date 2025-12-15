@@ -31,7 +31,6 @@ The second data source that we are using is the GTFS data. GTFS (or General Tran
 
 The 3rd data source we are using is the Google API. this API allows us to use Google maps data to see the most efficient routes to go to any place on the map separated by the mode of transportation (bikes, public transit, cars). We can use this API to track if the usage of micromobility is actually a better form of transit than any of the other public transit method.
 
-## Result
 
 ## Analysis
 
@@ -54,13 +53,13 @@ Overall, we can see that micromobility is filling in gaps in our public transit 
 
 While this project has brought in some interesting insights to how micrmobility interacts with the rest of our transportation systems, there are still some limitations in our work.
 
-One such limitations is our inability to track e-scooter trips. Although we are able to get the points where the trips starts and ends, we are unable to get the routes of the scooter for security reasons. This means that we are forced to assume the riders are taking the most efficient and safest route to get from point A to point B. simply looking at the amount of outliers, we can see that this is not the case. People use scooters for all kinds of activities that are not tracked, for instance dropping someone off or going on a joy ride will have vastly different implications to our vizualizations.
-
-While the grid-based density mapping provides a detailed and intuitive view of how micromobility demand varies across Minneapolis, several methodological considerations influence the interpretation of results.
+One such limitations is our inability to track e-scooter trips. Although we are able to get the points where the trips starts and ends, we are unable to get the routes of the scooter for security reasons. This means that we are forced to assume the riders are taking the most efficient and safest route to get from point A to point B. simply looking at the amount of outliers, we can see that this is not the case. People use scooters for all kinds of activities that are not tracked, for instance dropping someone off or going on a joy ride will have vastly different implications to our visualizations.
 
 First, the choice of grid size strongly shapes the apparent concentration of trips. Smaller grids give more localized detail but can exaggerate noise, while larger grids smooth transitions and may mask meaningful micro-spatial patterns. Although the selected grid seems to balance clarity with granularity, results should be contextualized in relation to this design choice.
 
 Second, density values represent raw counts rather than normalized rates. High-density zones may reflect not only true user demand but also differences in device availability, operator service priorities, or the permitted riding zones defined by vendors. Areas with low or missing values may not indicate lack of demand but rather policy-based or supply-based restrictions (e.g., geofencing, maintenance gaps, or availability biases). Without incorporating supply-side metrics, the map reflects observed usage rather than potential or unmet demand.
+
+Another
 
 
 Despite these limitations, the grid-based density approach provides a strong spatial foundation for understanding micromobility patterns across Minneapolis. It effectively highlights hotspots, reveals multimodal connections, and guides future steps such as integrating environmental variables, transit data, and temporal patterns to form a more holistic mobility assessment.
