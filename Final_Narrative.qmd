@@ -76,4 +76,10 @@ Although there can be many changes we can apply to our data as we assumed what w
 
 ## Member Contributions
 
+Aki - Worked with preliminary data and exploratory vizualizations. made the Final Narrative. Communicated and got in contact with the experts
+
+Yosephine - Created the Dashboard. Cleaned all the GTFS and Mircomobility Data. Took notes on the experts contributions.
+
+Hanna - Worked with the google API. added much needed versatility to our vizualizations. Set up meeting with the experts
+
 ## AI Statement
