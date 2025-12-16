@@ -6,9 +6,11 @@ editor: visual
 ---
 
 # Projects in Data Science: A Crossover of Micromobility and Public Transportation in Minneapolis
+
 ```{r}
 library(knitr)
 ```
+
 *Aki Wada, Hanna Chang, and Yosephine Manihuruk*
 
 ## Project Summary
@@ -33,18 +35,15 @@ The second data source that we are using is the GTFS data. GTFS (or General Tran
 
 The 3rd data source we are using is the Google API. this API allows us to use Google maps data to see the most efficient routes to go to any place on the map separated by the mode of transportation (bikes, public transit, cars). We can use this API to track if the usage of micromobility is actually a better form of transit than any of the other public transit method.
 
-
 ## Analysis
 
 The spatial distribution of micromobility trip-starts across Minneapolis reveals a highly clustered pattern centered around the city’s urban core, with density diminishing progressively toward peripheral neighborhoods. The highest-intensity cells, representing between 1,600 and over 6,000 trip starts per week, are concentrated in and around Downtown Minneapolis, the University of Minnesota area, and the Uptown/Lyn-Lake corridor. These zones represent areas with high population density, commercial activity, and strong transit connectivity, suggesting that micromobility usage is most heavily driven by demand for short, urban trips that complement existing transportation infrastructure.
 
 Trip density also appears to align with major transit lines and corridors. The presence of consistently moderate-to-high density cells along Hennepin Avenue, University Avenue, Lake Street, and Portland–Park suggests that micromobility trips function as a first-mile/last-mile link to public transit. This is consistent with known behavior in cities where shared bikes and scooters support multimodal movement patterns. Outlying residential neighborhoods such as Nokomis, Camden, or parts of Northeast show sparse usage, reflecting lower trip demand, reduced station/service availability, or longer trip distances less suited for micromobility.
 
-
 Interestingly enough the e-scooter usage seems to be filling in more gaps in the transportation than we expected. over 60% of e-scooter users are not overlapping inside the bus routes. In fact the majority of trips do not have any overlap with bus stops what so ever. We expected that most e-scooter rides would be utilizes as the first or last mile of a trip; meaning that e-scooters would be used to get to bus stops instead of replace them. Although there is a large portion of data that does support that people are using the e-scooters for this reason, there is still a large portion of the data supports that people are using e-scooters in places where bus routes are not in easily accessible locations. This implies that there are places where there would be an effective for Minneapolis to fill in these gaps of bus routes.
 
 ![](Screenshots/screenshot1.png)
-
 
 In terms of efficiency of travel, the e-scooters have proven themselves to be a little inefficient. The e-scooters median time is about 7 minutes, They seem to be doubling the median time of bikes at about 4 minutes and to be slightly below transit times at around 10 minutes. We are using median times instead of average time due to the high amount of outliers present in the scooter data. This is most likely due to the fact that people also use e-scooters for leisure instead of effective transportation.
 
@@ -82,8 +81,10 @@ Although there can be many changes we can apply to our data as we assumed what w
 
 Aki - Worked with preliminary data and exploratory vizualizations. made the Final Narrative. Communicated and got in contact with the experts
 
-Yosephine - Created the Dashboard. Cleaned all the GTFS and Mircomobility Data. Took notes on the experts contributions.
+Yosephine - Created the Dashboard. Cleaned most GTFS and Mircomobility Data. Took notes on the experts contributions.
 
-Hanna - Worked with the google API. added much needed versatility to our vizualizations. Set up meeting with the experts
+Hanna - Worked with the google API. Added much needed versatility to our vizualizations. Created data concatenating pipeline for public transit data.
 
 ## AI Statement
+
+For this project, AI was frequently used for research, brainstorming, and debugging code. We have reviewed and edited its content, and we take full responsibility for the final submission.
